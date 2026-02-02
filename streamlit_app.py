@@ -580,8 +580,8 @@ def render_main_controls():
     """상단 조회 컨트롤 (바디 영역 렌더링)"""
     current_agent = st.session_state.get('selected_agent')
     
-    # 상단 컨트롤 행
-    col1, col2, col3, col4 = st.columns([0.5, 6, 1.5, 1.5])
+    # 상단 컨트롤 행 (년/월 옆에 설정 버튼 배치)
+    col1, col2, col3, col4, col5 = st.columns([0.5, 5.5, 1.2, 1.2, 1.1])
     
     with col1:
         if current_agent:
@@ -602,16 +602,13 @@ def render_main_controls():
         if 'shadow_year' not in st.session_state:
             st.session_state.shadow_year = 2026
         
-        # Calculate index based on shadow state
         yrs = [2024, 2025, 2026]
         try:
             yr_idx = yrs.index(st.session_state.shadow_year)
         except ValueError:
-            yr_idx = 2 # Default to 2026 if not found
+            yr_idx = 2
             
         target_year = st.selectbox("년도", yrs, index=yr_idx, key="year_sel_body", label_visibility="collapsed")
-        
-        # Update shadow state if changed
         if target_year != st.session_state.shadow_year:
             st.session_state.shadow_year = target_year
             
@@ -620,24 +617,19 @@ def render_main_controls():
         if 'shadow_month' not in st.session_state:
              st.session_state.shadow_month = datetime.now().month
              
-        # Use shadow state for index
         m_idx = st.session_state.shadow_month - 1
         if m_idx < 0 or m_idx > 11: m_idx = 0
         
         target_month = st.selectbox("월", list(range(1, 13)), index=m_idx, key="month_sel_body", 
                                     format_func=lambda x: f"{x}월", label_visibility="collapsed")
         
-        # Update shadow state if changed
         if target_month != st.session_state.shadow_month:
             st.session_state.shadow_month = target_month
 
-    # [신규] 우측 상단 설정 버튼 추가
-    st.markdown("""
-    <div style="position: absolute; top: -50px; right: 0;">
-    """, unsafe_allow_html=True)
-    if st.button("⚙️ 설정", key="btn_open_settings_header"):
-        data_settings_modal()
-    st.markdown("</div>", unsafe_allow_html=True)
+    with col5:
+        # 설정 버튼을 년/월 옆으로 이동
+        if st.button("⚙️ 설정", key="btn_open_settings_header", use_container_width=True):
+            data_settings_modal()
     
     st.markdown('<div style="margin-bottom: 2rem; border-bottom: 1px solid #F1F5F9; padding-bottom: 1rem;"></div>', unsafe_allow_html=True)
 
