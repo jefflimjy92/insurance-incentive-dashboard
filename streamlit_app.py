@@ -9,8 +9,14 @@ import numpy as np
 import altair as alt
 import textwrap
 import os
+import sys
 import pickle
 from datetime import datetime, timedelta
+
+# GitHub/Streamlit Cloud 환경에서 로컬 모듈을 찾을 수 있도록 현재 디렉토리를 경로에 추가
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
 
 # 로컬 모듈 import
 from data_loader import (
