@@ -801,85 +801,96 @@ def render_main_controls():
         .header-back-wrapper button:hover {
             background: #F1F5F9 !important;
             border-radius: 8px !important;
-            transform: scale(1.1);
         }
         </style>
     """, unsafe_allow_html=True)
 
-    with st.container():
-        st.markdown('<div class="fixed-header-anchor"></div>', unsafe_allow_html=True)
-        # 3단 구조: 좌측(타이틀+네비), 중앙(여백), 우측(컨트롤)
-        h_col_left, h_col_spacer, h_col_right = st.columns([4, 1, 3])
-        
-        with h_col_left:
-            header_html = f"""
-            <div style="display:flex; align-items:center; gap:25px;">
-                <div class="header-title-text">🎯 더바다인슈 실적 현황</div>
-                <div style="display:flex; gap:8px;">
-                    <a href="#stats-section" class="nav-link">📊 통계</a>
-                    <a href="#trend-section" class="nav-link">📈 추이</a>
-                    <a href="#agents-section" class="nav-link">👥 설계사</a>
-                </div>
-            </div>
-            """
-            if current_agent:
-                header_html = f"""
-                <div class="header-title-text"><span style="color:#4F46E5;">{current_agent}</span>님 명세</div>
-                <div style="display:flex; gap:8px; margin-left: 15px;">
-                    <a href="#stats-section" class="nav-link">📊 통계</a>
-                    <a href="#trend-section" class="nav-link">📈 추이</a>
-                    <a href="#agents-section" class="nav-link">👥 설계사</a>
-                </div>
-                """
-                # 뒤로가기 버튼과 타이틀 결합 (열을 플랫하게 배치하여 정렬 문제 해결)
-                c_back, c_title = st.columns([0.2, 3.8])
-                with c_back:
-                    st.markdown('<div class="header-back-wrapper">', unsafe_allow_html=True)
-                    if st.button("⬅️", key="header_back_btn", use_container_width=True):
-                        # [Scroll to Top]
-                        st.components.v1.html("<script>window.parent.window.scrollTo(0,0);</script>", height=0)
-                        st.session_state.selected_agent = None
-                        st.rerun()
-                    st.markdown('</div>', unsafe_allow_html=True)
-                with c_title: st.markdown(f'<div style="display:flex; align-items:center; height:60px;">{header_html}</div>', unsafe_allow_html=True)
-            elif current_team:
-                header_html = f"""
-                <div class="header-title-text"><span style="color:#4F46E5;">{current_team}</span> 현황</div>
-                <div style="display:flex; gap:8px; margin-left: 15px;">
-                    <a href="#metrics-section" class="nav-link">📊 지표</a>
-                    <a href="#trend-section" class="nav-link">📈 분석</a>
-                </div>
-                """
-                # 뒤로가기 버튼과 타이틀 결합
-                c_back, c_title = st.columns([0.2, 3.8])
-                with c_back:
-                    st.markdown('<div class="header-back-wrapper">', unsafe_allow_html=True)
-                    if st.button("⬅️", key="header_team_back_arrow", use_container_width=True):
-                        # [Scroll to Top]
-                        st.components.v1.html("<script>window.parent.window.scrollTo(0,0);</script>", height=0)
-                        st.session_state.selected_team = None
-                        st.rerun()
-                    st.markdown('</div>', unsafe_allow_html=True)
-                with c_title: st.markdown(f'<div style="display:flex; align-items:center; height:60px;">{header_html}</div>', unsafe_allow_html=True)
-            else:
-                st.markdown(header_html, unsafe_allow_html=True)
+    # --- Header Render ---
+    from ui_components import render_sticky_header
+    
+    header_right_col = None
 
-        with h_col_right:
-            # 우측 컨트롤러
-            r1, r2, r3 = st.columns([1, 1, 0.8])
-            with r1:
-                target_year = st.selectbox("년도", yrs, index=yr_idx, key="year_sel_header", label_visibility="collapsed")
-            with r2:
-                target_month = st.selectbox("월", list(range(1, 13)), index=m_idx, key="month_sel_header", format_func=lambda x: f"{x}월", label_visibility="collapsed")
-            with r3:
-                if st.button("⚙️ 설정", key="btn_open_settings_header_fixed", use_container_width=True):
-                    data_settings_modal()
+    if current_agent:
+        # Agent Detail Header
+        def back_to_main():
+            st.session_state.selected_agent = None
             
-            st.session_state.shadow_year = target_year
-            st.session_state.shadow_month = target_month
+        nav_items = [
+            {'label': '통계', 'anchor': '#stats-section'},
+            {'label': '추이', 'anchor': '#trend-section'},
+            {'label': '시상내역', 'anchor': '#history-section'}
+        ]
+        header_right_col = render_sticky_header(
+            title=f"<span style='color:#4F46E5;'>{current_agent}</span>님 명세",
+            is_detail=True,
+            back_callback=back_to_main,
+            nav_items=nav_items
+        )
+    elif current_team:
+        # Branch Detail Header
+        def back_to_main_team():
+            st.session_state.selected_team = None
 
-            sync_date_str = datetime.today().strftime("%Y-%m-%d")
-            st.markdown(f'<div style="text-align:right; font-size:0.7rem; color:#94A3B8; margin-top:-22px; margin-right:4px;">연동: {sync_date_str}</div>', unsafe_allow_html=True)
+        nav_items = [
+            {'label': '통계', 'anchor': '#stats-section'},
+            {'label': '추이', 'anchor': '#trend-section'},
+            {'label': '설계사별', 'anchor': '#agent-section'}
+        ]
+        header_right_col = render_sticky_header(
+            title=f"<span style='color:#4F46E5;'>{current_team}</span> 현황",
+            is_detail=True,
+            back_callback=back_to_main_team,
+            nav_items=nav_items
+        )
+    else:
+        # Main Dashboard Header
+        nav_items = [
+            {'label': '통계', 'anchor': '#stats-section'},
+            {'label': '추이', 'anchor': '#trend-section'},
+            {'label': '팀별', 'anchor': '#team-section'},
+            {'label': '설계사별', 'anchor': '#agent-section'}
+        ]
+        header_right_col = render_sticky_header(
+            title="더바다인슈 실적 현황",
+            is_detail=False,
+            nav_items=nav_items
+        )
+
+    # --- Global Filters (In Header) ---
+    with header_right_col:
+        # Use columns inside the header's right container for alignment
+        # r1: Year, r2: Month, r3: Settings
+        r1, r2, r3 = st.columns([1.2, 1.2, 1], gap="small")
+        with r1:
+            target_year = st.selectbox(
+                "년도", 
+                yrs, 
+                index=yr_idx, 
+                key="year_sel_header", 
+                label_visibility="collapsed"
+            )
+        with r2:
+            target_month = st.selectbox(
+                "월", 
+                list(range(1, 13)), 
+                index=m_idx, 
+                key="month_sel_header", 
+                format_func=lambda x: f"{x}월", 
+                label_visibility="collapsed"
+            )
+        with r3:
+            if st.button("⚙️ 설정", key="btn_open_settings_header_fixed", use_container_width=True):
+                data_settings_modal()
+        
+        # Sync date text below controls (compact)
+        sync_date_str = datetime.now().strftime("%Y-%m-%d %H:%M")
+        st.markdown(f'<div style="text-align:right; font-size:0.6rem; color:#94A3B8; margin-top:-32px; letter-spacing:-0.02em;">연동: {sync_date_str}</div>', unsafe_allow_html=True)
+
+    st.session_state.shadow_year = target_year
+    st.session_state.shadow_month = target_month
+
+    # 본문 시작 전 간격
+    pass
 
     # 본문 시작 전 간격
     pass
@@ -1009,6 +1020,8 @@ def render_metrics(summary: dict):
                 <div class="metric-sub" style="color: transparent;">-</div>
             </div>
         """, unsafe_allow_html=True)
+        
+    st.markdown('<div class="metrics-bottom-margin" style="margin-bottom: 24px;"></div>', unsafe_allow_html=True)
 
 
 def render_regret_analysis(regrets_df: pd.DataFrame):
@@ -1729,8 +1742,7 @@ def render_results_table(results_df: pd.DataFrame):
 
 def render_product_statistics(contracts_df: pd.DataFrame):
     """2. 상품별/보험사별 통계 (표 형태)"""
-    st.markdown('<div id="stats-section"></div>', unsafe_allow_html=True)
-    st.subheader("📊 보험사별/상품별 실적 통계")
+    # Header moved to caller to allow injecting metrics between header and table
     
     if not contracts_df.empty:
         # 1. 원본 데이터 계산
@@ -2267,10 +2279,11 @@ def main():
                     summary['period_start'] = calc_params['period_start']
                     summary['period_end'] = calc_params['period_end']
                     
-                    # 1. 메인 통계 지표 카드 (4개)
-                    render_metrics(summary)
+                    # 1. 메인 통계 지표 카드 + 2. 보험사별/상품별 실적 통계
+                    st.markdown('<div id="stats-section"></div>', unsafe_allow_html=True)
+                    st.subheader("📊 보험사별/상품별 실적 통계")
                     
-                    # 2. 보험사별/상품별 실적 통계
+                    render_metrics(summary)
                     render_product_statistics(month_filtered_df)
                     
                     # 3. 월간 계약 데이터 상세 보기 (Expander)
@@ -2293,6 +2306,7 @@ def main():
                             st.info("해당 기간의 계약 내역이 없습니다.")
                     
                     # 4. 실적 분석 추이 및 상세 내역 그래프
+                    st.markdown('<div id="trend-section"></div>', unsafe_allow_html=True)
                     render_performance_charts(processed_df, results, calc_params['period_start'], calc_params['period_end'])
                     
                     # 5. 성과 분석 및 전략 가이드
@@ -2301,6 +2315,7 @@ def main():
 
                     # 6. 시상 상세 내역 테이블 (하단 배치)
                     if not results.empty:
+                        st.markdown('<div id="history-section"></div>', unsafe_allow_html=True)
                         st.subheader("🏆 달성 시상 상세 내역")
                         render_results_table(results)
                 elif st.session_state.get('selected_team'):
@@ -2361,10 +2376,11 @@ def main():
                         'period_end': calc_params['period_end']
                     }
                     
-                    # 1. 지표 렌더링
-                    render_metrics(summary)
+                    # 1. 메인 통계 지표 + 2. 상품 통계 (순서 변경 및 헤더 통합)
+                    st.markdown('<div id="stats-section"></div>', unsafe_allow_html=True)
+                    st.subheader("📊 보험사별/상품별 실적 통계")
                     
-                    # 2. 상품 통계
+                    render_metrics(summary)
                     render_product_statistics(team_contracts)
                     
                     # 3. 추이 차트 (Team Scope)
@@ -2373,10 +2389,12 @@ def main():
                     # Let's verify render_performance_charts signature. 
                     # It takes (contracts_df, results_df, start, end). 
                     # We pass team filtered contracts.
+                    st.markdown('<div id="trend-section"></div>', unsafe_allow_html=True)
                     render_performance_charts(processed_all[processed_all['지점'] == team_name], 
                                               team_results, calc_params['period_start'], calc_params['period_end'])
                     
                     # 4. 팀원 리스트 (테이블형)
+                    st.markdown('<div id="agent-section"></div>', unsafe_allow_html=True)
                     st.markdown("### 👥 팀원 현황")
                     if not team_agg.empty:
                         # 정렬 컨트롤
@@ -2537,9 +2555,11 @@ def main():
                         # 화면 렌더링에 사용할 월별 필터링 데이터 준비
                         monthly_stats_df = filter_by_period(processed_df, calc_params['period_start'], calc_params['period_end'])
 
-                        render_metrics(summary)
+                        # 1. 메인 통계 지표 + 2. 보험사별/상품별 실적 통계 (순서 변경 및 헤더 통합)
+                        st.markdown('<div id="stats-section"></div>', unsafe_allow_html=True)
+                        st.subheader("📊 보험사별/상품별 실적 통계")
                         
-                        # 2. 📊 보험사별/상품별 실적 통계 (조회 기간 반영)
+                        render_metrics(summary)
                         render_product_statistics(monthly_stats_df)
                         
                         # 월간 계약 데이터 상세 보기 (위치 이동: 통계 바로 아래)
@@ -2564,6 +2584,7 @@ def main():
                                 st.info("해당 기간의 계약 내역이 없습니다.")
                         
                         # 3. 📈 실적 분석 추이 및 상세 내역
+                        st.markdown('<div id="trend-section"></div>', unsafe_allow_html=True)
                         render_performance_charts(processed_df, display_period_start=calc_params['period_start'], display_period_end=calc_params['period_end'])
 
                         # 4. 현황 섹션 (팀별 / 설계사별 상하 구분)
@@ -2571,6 +2592,7 @@ def main():
                             st.markdown('<div id="status-section" style="height: 20px;"></div>', unsafe_allow_html=True)
                             
                             # --- A) 🏢 팀별 현황 섹션 ---
+                            st.markdown('<div id="team-section"></div>', unsafe_allow_html=True)
                             st.markdown("### 🏢 팀별 현황", unsafe_allow_html=True)
                             
                             # 팀별 집계
@@ -2640,6 +2662,7 @@ def main():
                             st.markdown("<br><br>", unsafe_allow_html=True)
 
                             # --- B) 👥 설계사별 현황 섹션 ---
+                            st.markdown('<div id="agent-section"></div>', unsafe_allow_html=True)
                             st.markdown(f"### 👥 설계사별 현황 ({len(agg_df)}명)", unsafe_allow_html=True)
                             
                             # 검색 및 필터 UI

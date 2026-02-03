@@ -225,3 +225,162 @@ def render_agent_list_ui(agg_df: pd.DataFrame):
                 st.rerun()
         
         st.markdown("<div style='border-bottom: 1px solid #F1F5F9; margin: 0.25rem 0;'></div>", unsafe_allow_html=True)
+
+
+def render_sticky_header(title, is_detail=False, back_callback=None, nav_items=None):
+    """
+    Renders a unified, sticky header for the application.
+    Returns:
+        container/column: The rightmost column to place additional controls (e.g. filters).
+    """
+    
+    # CSS for Sticky Header & Layout Optimizations
+    st.markdown("""
+    <style>
+        /* [Critical] Reset top padding */
+        .block-container {
+            padding-top: 0rem !important;
+            padding-bottom: 5rem !important;
+        }
+        
+        /* completely hide Streamlit's default header and decoration bar */
+        header, [data-testid="stHeader"] { 
+            display: none !important; 
+            visibility: hidden !important;
+            height: 0 !important;
+        }
+        
+        /* Hide the colorful decoration line at the top */
+        [data-testid="stDecoration"] {
+            display: none !important;
+            visibility: hidden !important;
+            height: 0 !important;
+        }
+        
+        /* Sticky Container - Logic: Ultra Compact & Flush Top */
+        div[data-testid="stVerticalBlock"] > div:has(.sticky-header-marker) {
+            position: sticky;
+            top: 0;
+            z-index: 9999;
+            background: transparent;
+            
+            /* User Requested Adjustment */
+            margin-top: -2.65rem; 
+            padding-top: 0.5rem; /* Ultra slim */
+            padding-bottom: 0.5rem; /* Ultra slim */
+            margin-bottom: 1.5rem;
+            
+            overflow: visible;
+        }
+
+        /* The Full-Bleed Background Layer */
+        div[data-testid="stVerticalBlock"] > div:has(.sticky-header-marker)::before {
+            content: "";
+            position: absolute;
+            top: 0;
+            left: -50vw; 
+            width: 200vw; 
+            height: 100%;
+            background: rgba(255, 255, 255, 0.98);
+            backdrop-filter: blur(12px);
+            border-bottom: 1px solid #e2e8f0;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            z-index: -1; 
+        }
+
+        /* Inner Content Wrapper */
+        div[data-testid="stVerticalBlock"] > div:has(.sticky-header-marker) > div {
+             width: 100%;
+        }
+
+        .header-title {
+            font-size: 1.25rem;
+            font-weight: 800;
+            color: #1e293b;
+            letter-spacing: -0.5px;
+            white-space: nowrap;
+        }
+        
+        .nav-pills {
+            display: flex;
+            background: #f1f5f9;
+            padding: 4px;
+            border-radius: 8px;
+            gap: 4px;
+        }
+        
+        .nav-link-custom {
+            text-decoration: none;
+            color: #64748b;
+            font-size: 0.85rem;
+            font-weight: 600;
+            padding: 6px 16px;
+            border-radius: 6px;
+            transition: all 0.2s;
+            white-space: nowrap;
+        }
+        
+        .nav-link-custom:hover {
+            color: #1e293b;
+            background: rgba(255,255,255,0.5);
+        }
+        
+        /* Adjust for back button */
+        .stButton button {
+            border: none;
+            background: transparent;
+            padding: 0;
+            color: #64748b;
+        }
+        .stButton button:hover {
+            color: #4f46e5;
+            background: transparent;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
+    with st.container():
+        st.markdown('<div class="sticky-header-marker"></div>', unsafe_allow_html=True)
+        
+        # Adjust column ratios to give space for controls on the right
+        # c1: Left (Title/Nav), c2: Spacer, c3: Right (Controls)
+        c1, c2, c3 = st.columns([5, 0.5, 3.5], gap="small")
+        
+        with c1:
+            # Layout: [BackBtn] [Title] [Nav]
+            sub_cols = st.columns([0.4, 2.5, 5]) if is_detail else st.columns([3, 5])
+            
+            nav_col_idx = 2 if is_detail else 1
+            
+            if is_detail:
+                # Back Button Column
+                with sub_cols[0]:
+                    if st.button("⬅️", key=f"back_btn_{title}"):
+                        if back_callback:
+                            back_callback()
+                            st.rerun()
+                # Title Column
+                with sub_cols[1]:
+                    st.markdown(f'<div class="header-title" style="margin-top: 5px;">{title}</div>', unsafe_allow_html=True)
+            else:
+                # Main Title Column
+                with sub_cols[0]:
+                    st.markdown(f'<div class="header-title">🎯 {title}</div>', unsafe_allow_html=True)
+
+            # Navigation Pills
+            with sub_cols[nav_col_idx]:
+                if nav_items:
+                    links_html = ""
+                    for item in nav_items:
+                        links_html += f'<a href="{item["anchor"]}" class="nav-link-custom">{item["label"]}</a>'
+                    
+                    st.markdown(f"""
+                    <div style="display: flex; align-items: center; height: 100%; padding-left: 10px;">
+                        <div class="nav-pills">
+                            {links_html}
+                        </div>
+                    </div>
+                    """, unsafe_allow_html=True)
+        
+        # Return the right column so the caller can place filters there
+        return c3
