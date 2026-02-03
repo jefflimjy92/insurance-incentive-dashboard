@@ -882,9 +882,10 @@ def render_main_controls():
             if st.button("⚙️ 설정", key="btn_open_settings_header_fixed", use_container_width=True):
                 data_settings_modal()
         
-        # Sync date text below controls (compact)
-        sync_date_str = datetime.now().strftime("%Y-%m-%d %H:%M")
-        st.markdown(f'<div style="text-align:right; font-size:0.6rem; color:#94A3B8; margin-top:-32px; letter-spacing:-0.02em;">연동: {sync_date_str}</div>', unsafe_allow_html=True)
+        # Sync date text below controls (compact) - Explicit KST (UTC+9)
+        kst_now = datetime.utcnow() + timedelta(hours=9)
+        sync_date_str = kst_now.strftime("%Y-%m-%d %H:%M")
+        st.markdown(f'<div style="text-align:right; font-size:0.6rem; color:#94A3B8; margin-top:-32px; letter-spacing:-0.02em;">연동: {sync_date_str} (KST)</div>', unsafe_allow_html=True)
 
     st.session_state.shadow_year = target_year
     st.session_state.shadow_month = target_month
@@ -2018,7 +2019,7 @@ def render_footer_report(results_df: pd.DataFrame, contracts_df: pd.DataFrame, s
 
     # 가이드 표시 (Collapsible Expander + 2-Column Grid)
     if active_items or history_items or switch_items:
-        with st.expander("🎯 AI 성과 최적화 가이드 (수익 극대화 전략 분석)", expanded=False):
+        with st.expander("🎯 AI 성과 최적화 가이드 (수익 극대화 전략 분석)", expanded=True):
             # 표시할 항목들을 하나의 리스트로 통합
             render_items = []
             for item in switch_items: render_items.append(('switch', item))
