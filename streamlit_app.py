@@ -11,6 +11,7 @@ import textwrap
 import os
 import pickle
 from datetime import datetime, timedelta
+import streamlit.components.v1 as components
 
 # 로컬 모듈 import
 from data_loader import (
@@ -36,7 +37,7 @@ from analysis import (
 
 # --- 캐싱 전용 함수 ---
 @st.cache_data(show_spinner="전체 시상금 계산 중... (수 분이 소요될 수 있습니다)")
-def get_batch_calculation(contracts_df, rules_df, period_start, period_end, company_filter, _v=6):
+def get_batch_calculation(contracts_df, rules_df, period_start, period_end, company_filter, _v=7):
     """모든 설계사의 시상 내역을 한 번에 계산하여 캐싱 (_v: 캐시 갱신용 버전)"""
     # [CRITICAL] 실적 분류(분류 컬럼)를 위해 전처리 필수 수행
     processed_all, _ = preprocess_contracts(contracts_df, agent_name=None)
@@ -56,11 +57,60 @@ def get_batch_calculation(contracts_df, rules_df, period_start, period_end, comp
 
 # 페이지 설정
 st.set_page_config(
-    page_title="💰 보험 인센티브 대시보드",
-    page_icon="💰",
+    page_title="더바다 실적관리",
+    page_icon="🎯",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
+
+# [UX Improvement] Scroll to top on initial load (Refresh/F5)
+# This logic ensures the page starts at the top when reloaded, but maintains scroll position on interactive reruns.
+# [UX Improvement] Scroll to top logic
+# 1. On initial load (Refresh/F5)
+# 2. When explicitly triggered by navigation actions (trigger_scroll_top)
+should_scroll = False
+if 'init_scroll_done' not in st.session_state:
+    st.session_state['init_scroll_done'] = True
+    should_scroll = True
+
+if st.session_state.get('trigger_scroll_top', False):
+    st.session_state['trigger_scroll_top'] = False
+    should_scroll = True
+
+if should_scroll:
+    components.html(
+        """
+        <script>
+            // 1. Remove hash to prevent anchor jumping
+            if (window.parent.location.hash) {
+                window.parent.history.replaceState(null, null, window.parent.location.pathname + window.parent.location.search);
+            }
+
+            // 2. Persistent scroll to top (repeatedly force for 300ms to handle dynamic content loading)
+            function forceScrollTop() {
+                var doc = window.parent.document;
+                
+                // Window
+                window.parent.scrollTo(0, 0);
+                
+                // Streamlit containers
+                var containers = doc.querySelectorAll('[data-testid="stAppViewContainer"], .main, .block-container');
+                containers.forEach(function(c) { 
+                    c.scrollTo(0, 0); 
+                    c.scrollTop = 0;
+                });
+            }
+
+            // Execute immediately
+            forceScrollTop();
+
+            // Repeat for a short duration to override layout shifts
+            var intervalId = setInterval(forceScrollTop, 10);
+            setTimeout(function() { clearInterval(intervalId); }, 300);
+        </script>
+        """,
+        height=0
+    )
 
 # 커스텀 CSS (Figma 디자인 기반 - 고대비 네이비 & 라이트 그레이)
 st.markdown("""
@@ -131,15 +181,70 @@ st.markdown("""
            하지만 여기서는 CSS selector의 :has() 가상 클래스를 활용해 봅니다. */
     }
 
-    /* 메인 앱 컨테이너 여백 최적화 (고정 헤더 삭제) */
+    /* 메인 앱 컨테이너 여백 최적화 */
     .block-container {
-        padding-top: 2rem !important;
+        padding-top: 0px !important;
         padding-bottom: 2rem !important;
         max-width: 1250px !important;
+        margin-top: 0px !important;
     }
 
-    header[data-testid="stHeader"] {
+    [data-testid="stAppViewContainer"] {
+        padding-top: 0px !important;
+    }
+    
+    [data-testid="stMain"] {
+        margin-top: 0px !important;
+        padding-top: 0px !important;
+    }
+
+    div[data-testid="stVerticalBlock"] > div:has(div.header-anchor) {
+        position: sticky;
+        top: 0px;
+        z-index: 1000;
+        background-color: #F8F9FC;
+        padding-top: 0px !important;
+        padding-bottom: 0.75rem;
+        border-bottom: 1px solid #E2E8F0 !important;
+        margin-top: 0px !important;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.02) !important;
+    }
+
+    /* 헤더 컨트롤 요소 크기 축소 */
+    div[data-testid="stVerticalBlock"] > div:has(div.header-anchor) [data-testid="stSelectbox"] > div[data-baseweb="select"] {
+        height: 30px !important;
+        min-height: 30px !important;
+    }
+    div[data-testid="stVerticalBlock"] > div:has(div.header-anchor) [data-testid="stSelectbox"] [data-baseweb="select"] * {
+        font-size: 0.8rem !important;
+    }
+    div[data-testid="stVerticalBlock"] > div:has(div.header-anchor) button[kind="secondary"], 
+    div[data-testid="stVerticalBlock"] > div:has(div.header-anchor) button[kind="primary"] {
+        height: 30px !important;
+        min-height: 30px !important;
+        padding: 0 10px !important;
+        font-size: 0.9rem !important;
+        line-height: 30px !important;
+        padding-bottom: 2px !important;
+    }
+    div[data-testid="stVerticalBlock"] > div:has(div.header-anchor) .stMarkdown div p {
+        font-size: 0.8rem !important;
+    }
+    
+    .header-anchor {
+        display: none;
+    }
+    
+    /* 스크롤 시 앵커 위치 보정 - 헤더 크기에 맞게 재조정 */
+    [id^="stats-section"], [id^="charts-section"], [id^="agents-section"] {
+        scroll-margin-top: 10rem;
+    }
+
+    header[data-testid="stHeader"], [data-testid="stDecoration"] {
         display: none !important;
+        visibility: hidden !important;
+        height: 0 !important;
+        width: 0 !important;
     }
 
     /* 프리미엄 핀테크 디자인 시스템 */
@@ -206,6 +311,31 @@ st.markdown("""
         background: var(--slate-50);
         border-color: var(--primary);
         color: var(--primary);
+    }
+    
+    /* [NEW] 강제 통일 네비게이션 버튼 스타일 */
+    .nav-btn-fixed {
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        height: 28px !important;
+        min-height: 28px !important;
+        max-height: 28px !important;
+        padding: 0 10px !important;
+        font-size: 13px !important;
+        font-weight: 600 !important;
+        background-color: #F1F5F9 !important;
+        color: #475569 !important;
+        border-radius: 6px !important;
+        text-decoration: none !important;
+        white-space: nowrap !important;
+        border: 1px solid transparent !important;
+        line-height: normal !important; 
+        box-sizing: border-box !important;
+    }
+    .nav-btn-fixed:hover {
+        background-color: #E2E8F0 !important;
+        color: #1E293B !important;
     }
     .agent-info {
         margin-left: auto;
@@ -324,11 +454,11 @@ st.markdown("""
     /* 화이트 카드 컨테이너 */
     .white-card {
         background: white;
-        padding: 1.5rem;
+        padding: 1.25rem;
         border-radius: 12px;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.03);
         border: 1px solid #E5E7EB;
-        margin-bottom: 1.5rem;
+        margin-bottom: 1rem;
     }
     
     /* 지표 카드 특정 스타일 (Minimalist) */
@@ -580,72 +710,147 @@ def render_main_controls():
     """상단 조회 컨트롤 (바디 영역 렌더링)"""
     current_agent = st.session_state.get('selected_agent')
     
-    # 상단 컨트롤 행 (년/월 옆에 설정 버튼 배치)
-    col1, col2, col3, col4, col5 = st.columns([0.5, 5.5, 1.2, 1.2, 1.1])
+def render_main_controls():
+    """상단 조회 컨트롤 및 책갈피 (고정 헤더 영역)"""
+    current_agent = st.session_state.get('selected_agent')
     
-    with col1:
-        if current_agent:
-            if st.button("<", key="body_back_btn"):
-                st.session_state.selected_agent = None
+    # --- 고정 헤더 영역 시작 ---
+    with st.container():
+        st.markdown('<div class="header-anchor"></div>', unsafe_allow_html=True)
+        
+        # 1. 상단 컨트롤 행 (타이틀 + 네비 + 컨트롤)
+        # 타이틀을 좌측으로 최대한 당기고, 네비게이션을 그 바로 옆에 서브메뉴처럼 밀착
+        # 1. 상단 컨트롤 행 (타이틀 + 네비 + 컨트롤)
+        # 타이틀을 좌측으로 최대한 당기고, 네비게이션을 그 바로 옆에 서브메뉴처럼 밀착
+        # [Adjusted Widths] Year column increased (0.8 -> 1.1) to prevent "20..." truncation
+        col_title, col_nav, col_year, col_month, col_set = st.columns([1.8, 4.4, 1.1, 0.9, 0.8], gap="small")
+        
+        with col_title:
+            current_agent = st.session_state.get('selected_agent')
+            selected_branch = st.session_state.get('selected_branch_filter')
+            
+            if current_agent or selected_branch:
+                c1, c2 = st.columns([0.15, 0.85]) 
+                with c1:
+                    if st.button("‹", key="body_back_btn"):
+                        st.session_state.selected_agent = None
+                        st.session_state.selected_branch_filter = None
+                        st.rerun()
+                with c2:
+                    if current_agent:
+                        st.markdown(f'<div style="display:flex; align-items:center; height: 32px;"><span style="font-size:1.3rem; font-weight:700; color:#1E293B; white-space:nowrap;">{current_agent}님 명세</span></div>', unsafe_allow_html=True)
+                    else:
+                        st.markdown(f'<div style="display:flex; align-items:center; height: 32px;"><span style="font-size:1.3rem; font-weight:700; color:#1E293B; white-space:nowrap;">🏢 {selected_branch} 현황</span></div>', unsafe_allow_html=True)
+            else:
+                st.markdown('<div style="display:flex; align-items:center; height: 32px;"><h1 style="margin:0; font-size:1.5rem; white-space: nowrap; color: #1E293B;">🎯 더바다 실적관리</h1></div>', unsafe_allow_html=True)
+
+        with col_nav:
+            # Common style for all navigation buttons to ensure absolute consistency
+            # Using the gray (inactive) style for ALL buttons to create a uniform look
+            nav_btn_style = "display: inline-flex; align-items: center; justify-content: center; text-decoration: none; padding: 0 0.7rem; border-radius: 6px; font-size: 0.75rem; font-weight: 600; white-space: nowrap; height: 26px; background: #F1F5F9; color: #475569;"
+            
+            # 설계사 상세나 지점 상세일 때는 '팀별' 메뉴 숨기기
+            is_detail_view = current_agent is not None or selected_branch is not None
+            teams_link = f'<a href="#teams-section" class="nav-btn-fixed">🏢 팀별</a>' if not is_detail_view else ""
+            
+            awards_label = "📋 시상" if current_agent else "👥 설계사"
+            awards_href = "#awards-section" if current_agent else "#agents-section"
+            
+            # Create single-line HTML to prevent Markdown parser from adding <p> tags
+            nav_html = f'<div style="display: flex; gap: 0.4rem; align-items: center; height: 32px; overflow-x: auto; scrollbar-width: none; margin-top: 4px;">'
+            nav_html += f'<a href="#stats-section" class="nav-btn-fixed">📊 실적</a>'
+            nav_html += f'<a href="#charts-section" class="nav-btn-fixed">📈 추이</a>'
+            if teams_link:
+                nav_html += teams_link
+            nav_html += f'<a href="{awards_href}" class="nav-btn-fixed">{awards_label}</a>'
+            nav_html += '</div>'
+            
+            st.markdown(nav_html, unsafe_allow_html=True)
+
+        # [Dynamic Date Logic]
+        # Determine available years/months from loaded data if possible
+        c_df = st.session_state.get('contracts_df')
+        valid_years = [2024, 2025, 2026]
+        valid_months_map = {} # year -> list of months
+        
+        if c_df is not None and not c_df.empty and '접수일' in c_df.columns:
+            try:
+                # Ensure datetime
+                if not pd.api.types.is_datetime64_any_dtype(c_df['접수일']):
+                     c_df['접수일'] = pd.to_datetime(c_df['접수일'], errors='coerce')
+                
+                # Extract years
+                extracted_years = sorted(c_df['접수일'].dt.year.dropna().unique().astype(int).tolist())
+                if extracted_years:
+                    valid_years = extracted_years
+                    
+                    # Extract months for each year
+                    for y in valid_years:
+                        months = sorted(c_df[c_df['접수일'].dt.year == y]['접수일'].dt.month.dropna().unique().astype(int).tolist())
+                        if months:
+                            valid_months_map[y] = months
+            except Exception as e:
+                pass # Use defaults on error
+
+        with col_year:
+            if 'shadow_year' not in st.session_state:
+                st.session_state.shadow_year = 2026
+            
+            # Fallback if shadow_year is not in valid_years (e.g. data changed)
+            if st.session_state.shadow_year not in valid_years:
+                st.session_state.shadow_year = valid_years[-1] if valid_years else 2026
+
+            yr_idx = valid_years.index(st.session_state.shadow_year)
+            target_year = st.selectbox("년도", valid_years, index=yr_idx, key="year_sel_body", label_visibility="collapsed")
+            
+            if target_year != st.session_state.shadow_year:
+                st.session_state.shadow_year = target_year
+                if 'cached_data' in st.session_state: del st.session_state['cached_data']
                 st.rerun()
-        else:
-            st.empty()
+                
+        with col_month:
+            if 'shadow_month' not in st.session_state:
+                 st.session_state.shadow_month = datetime.now().month
             
-    with col2:
-        if current_agent:
-            st.markdown(f'<div style="display:flex; align-items:center;"><span style="font-size:1.5rem; font-weight:700; color:#1E293B;">{current_agent}님 시상 명세</span></div>', unsafe_allow_html=True)
-        else:
-            st.markdown('<h1 style="margin:0; font-size:1.8rem;">🏢 더바다 개인시상 분석</h1>', unsafe_allow_html=True)
+            # Determine available months for the selected year
+            available_months = valid_months_map.get(st.session_state.shadow_year, list(range(1, 13)))
             
-    with col3:
-        # Shadow Persistence for Year
-        if 'shadow_year' not in st.session_state:
-            st.session_state.shadow_year = 2026
-        
-        yrs = [2024, 2025, 2026]
-        try:
-            yr_idx = yrs.index(st.session_state.shadow_year)
-        except ValueError:
-            yr_idx = 2
-            
-        target_year = st.selectbox("년도", yrs, index=yr_idx, key="year_sel_body", label_visibility="collapsed")
-        if target_year != st.session_state.shadow_year:
-            st.session_state.shadow_year = target_year
-            
-    with col4:
-        # Shadow Persistence for Month
-        if 'shadow_month' not in st.session_state:
-             st.session_state.shadow_month = datetime.now().month
-             
-        m_idx = st.session_state.shadow_month - 1
-        if m_idx < 0 or m_idx > 11: m_idx = 0
-        
-        target_month = st.selectbox("월", list(range(1, 13)), index=m_idx, key="month_sel_body", 
-                                    format_func=lambda x: f"{x}월", label_visibility="collapsed")
-        
-        if target_month != st.session_state.shadow_month:
-            st.session_state.shadow_month = target_month
+            # Ensure current shadow_month is valid
+            if st.session_state.shadow_month not in available_months:
+                 # Default to latest available month or first
+                 st.session_state.shadow_month = available_months[-1] if available_months else 1
 
-    with col5:
-        # 설정 버튼을 년/월 옆으로 이동
-        if st.button("⚙️ 설정", key="btn_open_settings_header", use_container_width=True):
-            data_settings_modal()
-    
-    st.markdown('<div style="margin-bottom: 2rem; border-bottom: 1px solid #F1F5F9; padding-bottom: 1rem;"></div>', unsafe_allow_html=True)
+            if not available_months: # Fallback
+                available_months = list(range(1, 13))
 
-    # 기본값 계산
+            m_idx = available_months.index(st.session_state.shadow_month) if st.session_state.shadow_month in available_months else 0
+            
+            target_month = st.selectbox("월", available_months, index=m_idx, key="month_sel_body", 
+                                        format_func=lambda x: f"{x}월", label_visibility="collapsed")
+            if target_month != st.session_state.shadow_month:
+                st.session_state.shadow_month = target_month
+                if 'cached_data' in st.session_state: del st.session_state['cached_data']
+                st.rerun()
+
+        with col_set:
+            if st.button("⚙️ 설정", key="btn_open_settings_header", use_container_width=True):
+                data_settings_modal()
+            try:
+                if os.path.exists(CACHE_CONTRACTS):
+                    mod_time = os.path.getmtime(CACHE_CONTRACTS)
+                    last_update = datetime.fromtimestamp(mod_time).strftime('%y.%m.%d %H:%M')
+                    st.markdown(f'<div style="font-size: 0.6rem; color: #94A3B8; text-align: center; margin-top: -14px; font-family: monospace;">{last_update}</div>', unsafe_allow_html=True)
+            except: pass
+
+    # 기본값 계산 및 반환
     target_month_date = datetime(target_year, target_month, 1)
     base_date = datetime.combine(target_month_date, datetime.min.time())
     period_start, period_end = get_period_dates("월간", base_date)
-    
     return {
-        'agent_name': current_agent, 
-        'company': None,
-        'period_start': period_start,
-        'period_end': period_end,
-        'product_filter': ["인보험", "펫보험", "단체보험", "재물보험", "기타"],
-        'type_filter': None, # 필터링 로직 수정으로 여기서는 제거, 딜레이 렌더링으로 처리
-        'target_date': target_month_date
+        'agent_name': current_agent, 'company': None,
+        'period_start': period_start, 'period_end': period_end,
+        'product_filter': ["인보험", "펫보험", "단체보험", "재물보험", "실손보험", "자동차보험", "본인계약", "기타"],
+        'target_date': target_month_date, 'type_filter': []
     }
 
 
@@ -770,6 +975,16 @@ def get_award_card_html(group, period_str, status_color, status_icon, type_style
         target_val = group['target']
         target_display = f"{target_val:,.0f}" if pd.notna(target_val) and target_val > 0 else "-"
     
+    # Product Type Badge
+    product_type = group.get('대상분류', '')
+    product_badge = ""
+    if product_type and product_type != '전체':
+        product_badge = f"""
+        <span style="font-size: 0.7rem; color: #6366F1; font-weight: 500; margin-left: 4px; background: #EEF2FF; padding: 1px 4px; border-radius: 3px;">
+            {product_type}
+        </span>
+        """
+    
     html = f"""
     <!-- Status Icon -->
     <div style="display: flex; justify-content: center;">
@@ -778,7 +993,11 @@ def get_award_card_html(group, period_str, status_color, status_icon, type_style
     
     <!-- Award Name & Company -->
     <div style="padding-right: 1rem;">
-        <div style="font-weight: 700; font-size: 0.9rem; color: #111827; margin-bottom: 2px;">{group['name']} {imminent_badge}</div>
+        <div style="font-weight: 700; font-size: 0.9rem; color: #111827; margin-bottom: 2px;">
+            {group['name']}
+            {product_badge}
+            {imminent_badge}
+        </div>
         <div style="font-size: 0.75rem; color: #9CA3AF;">{group['company']}</div>
     </div>
     
@@ -1084,7 +1303,9 @@ def get_award_detail_html(group, period_stats, rows_df):
                 <thead>
                     <tr style="text-align: left; border-bottom: 1px solid #F3F4F6;">
                         <th style="padding: 0.5rem;">접수일</th>
+                        <th style="padding: 0.5rem;">계약자</th>
                         <th style="padding: 0.5rem;">상품명</th>
+                        <th style="padding: 0.5rem;">분류</th>
                         <th style="padding: 0.5rem; text-align: right;">보험료</th>
                     </tr>
                 </thead>
@@ -1099,13 +1320,15 @@ def get_award_detail_html(group, period_stats, rows_df):
             html_parts.append(f"""
                 <tr style="border-bottom: 1px solid #F9FAFB;">
                     <td style="padding: 0.4rem 0.5rem;">{date_str}</td>
+                    <td style="padding: 0.4rem 0.5rem; font-weight: 500;">{c.get('계약자', '-')}</td>
                     <td style="padding: 0.4rem 0.5rem;">{c.get('상품명', '-')}</td>
+                    <td style="padding: 0.4rem 0.5rem; color: #6B7280;">{c.get('분류', '-')}</td>
                     <td style="padding: 0.4rem 0.5rem; text-align: right;">{c.get('보험료', 0):,.0f}</td>
                 </tr>
             """)
         
         if len(all_contracts) > 50:
-             html_parts.append(f'<tr><td colspan="3" style="text-align: center; padding: 0.5rem; color: #9CA3AF;">... 외 {len(all_contracts)-50}건 더 있음</td></tr>')
+             html_parts.append(f'<tr><td colspan="5" style="text-align: center; padding: 0.5rem; color: #9CA3AF;">... 외 {len(all_contracts)-50}건 더 있음</td></tr>')
              
         html_parts.append("</tbody></table>")
     
@@ -1117,7 +1340,7 @@ def render_results_table(results_df: pd.DataFrame):
     
     # 헤더 및 범례
     st.markdown(textwrap.dedent("""
-        <div style="margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: flex-end;">
+        <div id="awards-section" style="margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: flex-end;">
             <h3 style="margin: 0; font-size: 1.125rem; font-weight: 700; color: #111827;">📋 전체 시상 내역</h3>
             <div style="display: flex; gap: 1rem; font-size: 0.75rem; color: #6B7280; font-weight: 500;">
                 <span style="display: flex; align-items: center; gap: 4px;"><span style="color: #4F46E5;">●</span> 초과 달성</span>
@@ -1246,6 +1469,9 @@ def render_results_table(results_df: pd.DataFrame):
             scens = group_df['scenarios'].dropna().iloc[0]
             if isinstance(scens, list) and scens:
                 max_possible = max([s.get('reward', 0) for s in scens])
+        elif '기준보상' in group_df.columns:
+             # [Fix] 기준보상(Potential Reward)을 우선 확인하여 미달성 시에도 최고 금액 표시
+             max_possible = group_df['기준보상'].max()
         elif '보상금액' in group_df.columns:
             max_possible = group_df['보상금액'].max()
         elif '지급금액' in group_df.columns:
@@ -1267,6 +1493,7 @@ def render_results_table(results_df: pd.DataFrame):
             'end_date': group_df['종료일'].max() if '종료일' in group_df.columns else pd.NaT,
             'period_stats': group_df['period_stats'].dropna().iloc[0] if 'period_stats' in group_df.columns and not group_df['period_stats'].dropna().empty else None,
             'scenarios': group_df['scenarios'].dropna().iloc[0] if 'scenarios' in group_df.columns and not group_df['scenarios'].dropna().empty else [],
+            '대상분류': group_df['대상분류'].iloc[0] if '대상분류' in group_df.columns else '',
             'original_index': group_df.index.min() # 원본 데이터 순서 추적용
         })
     
@@ -1361,30 +1588,199 @@ def render_results_table(results_df: pd.DataFrame):
     
     st.write(full_table_html, unsafe_allow_html=True)
 
+def render_footer_report(results_df: pd.DataFrame, contracts_df: pd.DataFrame, summary: dict, target_date: datetime):
+    """하단 리포트 및 추천 섹션 (확장된 성과 최적화 가이드 포함)"""
+    st.markdown('<div id="stats-section"></div>', unsafe_allow_html=True)
     
-    # 푸터
-    st.markdown(textwrap.dedent(f"""
-        <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 0; font-size: 0.75rem; color: #6B7280;">
-            <span>{len(award_groups)}개 시상 ({len(results_df)}행)</span>
-        </div>
-    """), unsafe_allow_html=True)
+    # 🎯 성과 최적화 가이드 로직 (Figma 고정 디자인 버전)
+    current_time = pd.Timestamp.now().normalize()
+    
+    # 80~100% 사이인 항목들 (중복 제거)
+    potential_df = results_df[(results_df['달성률'] >= 80) & (results_df['달성률'] < 100)].copy() if not results_df.empty else pd.DataFrame()
+    if not potential_df.empty:
+        potential_df = potential_df.drop_duplicates(subset=['시상명'])
+        potential_df['end_date_dt'] = pd.to_datetime(potential_df['종료일'])
+        ongoing_imminent = potential_df[potential_df['end_date_dt'] >= current_time]
+        past_missed = potential_df[potential_df['end_date_dt'] < current_time]
+    else:
+        ongoing_imminent = pd.DataFrame()
+        past_missed = pd.DataFrame()
+    
+    # [신규] 교차 최적화 분석
+    try:
+        from data_loader import analyze_cross_company_optimization
+        optimization_recos = analyze_cross_company_optimization(results_df)
+    except:
+        optimization_recos = []
+
+    active_items = []
+    history_items = []
+    switch_items = []
+
+    def get_v(row, keys, default=0):
+        for k in keys:
+            if k in row:
+                val = row[k]
+                if pd.notna(val): return val
+        return default
+
+    # 0. 전략적 전환 (SWITCH)
+    for reco in optimization_recos:
+        sat = reco['saturated_item']
+        opp = reco['opportunity_item']
+        switch_items.append({'sat_info': sat, 'opp_info': opp})
+
+    # 1. 액티브 가이드 (IMMINENT)
+    for _, r in ongoing_imminent.head(4).iterrows():
+        m_target = get_v(r, ['목표실적', 'target'])
+        m_perf = get_v(r, ['실적', 'perf'])
+        missing_amt = max(0, m_target - m_perf)
+        award_name = r.get('시상명', '')
+        company = get_v(r, ['회사', '원수사', '보험사'], '')
+        solidified = results_df[(results_df['시상명'] == award_name) & (results_df['회사'] == company)]['최종지급금액'].max() if not results_df.empty else 0
+        diff_payout = max(0, get_v(r, ['기준보상', '보상금액', '지급금액']) - (solidified if pd.notna(solidified) else 0))
+        
+        active_items.append({
+            'title': award_name, 'company': company,
+            'missing': missing_amt, 'bonus': diff_payout
+        })
+
+    # 2. 아쉬운 결과 (HISTORY)
+    for _, r in past_missed.head(4).iterrows():
+        m_target = get_v(r, ['목표실적', 'target'])
+        m_perf = get_v(r, ['실적', 'perf'])
+        missing_amt = max(0, m_target - m_perf)
+        award_name = r.get('시상명', '')
+        company = get_v(r, ['회사', '원수사', '보험사'], '')
+        solidified = results_df[(results_df['시상명'] == award_name) & (results_df['회사'] == company)]['최종지급금액'].max() if not results_df.empty else 0
+        loss_amt = max(0, get_v(r, ['기준보상', '보상금액', '지급금액']) - (solidified if pd.notna(solidified) else 0))
+        
+        history_items.append({
+            'title': award_name, 'company': company,
+            'missing': missing_amt, 'loss': loss_amt
+        })
+
+    # UI 렌더링 시작 (내용이 있을 때만 렌더링)
+    if active_items or history_items or switch_items:
+        # Title
+        st.markdown(f'<p style="font-weight: 700; color: #1E293B; margin-bottom: 1rem; font-size: 1.1rem; letter-spacing: -0.02em;">🎯 성과 최적화 가이드</p>', unsafe_allow_html=True)
+        
+        # 0. SWITCH Items
+        for item in switch_items:
+            sat, opp = item['sat_info'], item['opp_info']
+            s_target = sat.get('target', 0)
+            s_excess = sat.get('surplus', 0)
+            o_target = opp.get('target', 0)
+            o_bonus = opp.get('marginal_gain', 0)
+            s_award = sat.get('award_name', '')
+            o_award = opp.get('award_name', '')
+            
+            # FROM Target Pct Calculation
+            from_pct = min(100, int((s_target + s_excess) / s_target * 100)) if s_target > 0 else 100
+            remaining_surplus = max(0, s_excess - o_target)
+
+            html = f"""
+            <div class="guide-card-switch" style="background: linear-gradient(to right, #F8FAFC, #EFF6FF); border: 1px solid #DBEAFE; border-radius: 12px; padding: 16px; margin-bottom: 16px;">
+                <div style="margin-bottom: 12px;">
+                    <span class="badge-switch" style="background: #DBEAFE; color: #1E40AF; padding: 4px 8px; border-radius: 4px; font-size: 0.75rem; font-weight: 600;">✨ 전략적 집중 이동</span>
+                    <p style="margin-top: 8px; font-size: 0.9rem; color: #334155; line-height: 1.4;">
+                        <b>{sat['company']}</b>에서 초과 달성 중인 실적을<br/>
+                        <b>{opp['company']}</b>로 돌렸을 때의 수익 분석입니다.
+                    </p>
+                </div>
+                
+                <div style="display: flex; align-items: stretch; gap: 8px; margin-bottom: 16px;">
+                    <!-- FROM -->
+                    <div style="flex: 1; background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 8px; padding: 12px;">
+                        <div style="font-size: 0.75rem; color: #64748B; margin-bottom: 4px;">FROM (목표 {from_pct}% 달성)</div>
+                        <div style="font-weight: 700; color: #1E293B; margin-bottom: 4px;">{sat['company']}</div>
+                        <div style="font-size: 0.8rem; color: #475569;">
+                            목표: {s_target:,.0f}<br/>
+                            <span style="color: #059669; font-weight: 600;">초과: +{s_excess:,.0f}</span>
+                        </div>
+                        <div style="font-size: 0.7rem; color: #94A3B8; margin-top: 6px;">{s_award}</div>
+                    </div>
+                    
+                    <!-- Arrow -->
+                    <div style="display: flex; align-items: center; justify-content: center; color: #94A3B8; font-weight: 300; width: 20px;">→</div>
+                    
+                    <!-- TO -->
+                    <div style="flex: 1; background: #FFFFFF; border: 1px solid #BFDBFE; border-radius: 8px; padding: 12px; box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.1);">
+                        <div style="font-size: 0.75rem; color: #3B82F6; font-weight: 600; margin-bottom: 4px;">TO (상위구간 점프 기회)</div>
+                        <div style="font-weight: 700; color: #1E293B; margin-bottom: 4px;">{opp['company']}</div>
+                        <div style="font-size: 0.8rem; color: #475569;">
+                            도전 목표: {o_target:,.0f}<br/>
+                            <span style="color: #2563EB; font-weight: 700;">총 추가 보상: +{o_bonus:,.0f}원</span>
+                        </div>
+                        <div style="font-size: 0.7rem; color: #94A3B8; margin-top: 6px;">{o_award}</div>
+                    </div>
+                </div>
+                
+                <!-- Simulation -->
+                <div style="background: #F0F9FF; border-radius: 8px; padding: 12px; border: 1px solid #BAE6FD;">
+                    <div style="font-size: 0.85rem; font-weight: 600; color: #0369A1; margin-bottom: 4px;">💡 시뮬레이션 결과:</div>
+                    <div style="font-size: 0.8rem; color: #334155; line-height: 1.5;">
+                        {sat['company']}의 초과 실적인 <b>{s_excess:,.0f}원</b>을 {opp['company']}에 전환 사용한다면,<br/>
+                        {o_target:,.0f} 목표를 즉시 달성하여 <b>+{o_bonus:,.0f}원의 수익</b>을 추가로 확보할 수 있습니다.<br/>
+                        <span style="color: #64748B; font-size: 0.75rem;">(심지어 {remaining_surplus:,.0f}원의 실적이 더 남습니다!)</span>
+                    </div>
+                </div>
+            </div>
+            """
+            st.markdown(html, unsafe_allow_html=True)
+
+        # 1. Active Items
+        if active_items:
+            st.markdown("<div style='font-size:0.85rem; color:#475569; font-weight:600; margin: 24px 0 8px 0;'>🔥 지금 바로 챙겨야 할 기회</div>", unsafe_allow_html=True)
+            cols = st.columns(2)
+            for i, item in enumerate(active_items):
+                with cols[i % 2]:
+                    html = f"""
+                    <div style="background: #FFFFFF; border: 1px solid #E2E8F0; border-radius: 12px; padding: 16px; margin-bottom: 12px; height: 100%;">
+                        <div style="margin-bottom: 8px;"><span style="background: #FEF3C7; color: #D97706; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: 600;">⚠️ 달성임박</span></div>
+                        <div style="font-size: 0.9rem; font-weight: 700; color: #1E293B; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{item['title']}</div>
+                        <div style="font-size: 0.8rem; color: #64748B; margin-bottom: 8px;">{item['company']}</div>
+                        <div style="font-size: 0.85rem; color: #334155;">
+                            다음 단계까지 <br/>
+                            <span style="color:#D97706; font-weight:600;">{item['missing']:,.0f}원</span> 
+                            <span style="font-size:0.75rem; color:#059669;">(달성 시 +{item['bonus']:,.0f}원)</span>
+                        </div>
+                    </div>
+                    """
+                    st.markdown(html, unsafe_allow_html=True)
+
+        # 2. History Items
+        if history_items:
+            st.markdown("<div style='font-size:0.85rem; color:#64748B; font-weight:600; margin: 24px 0 8px 0;'>📚 지난달 복기 (아까운 미달성)</div>", unsafe_allow_html=True)
+            cols = st.columns(2)
+            for i, item in enumerate(history_items):
+                with cols[i % 2]:
+                    html = f"""
+                    <div style="background: #F8FAFC; border: 1px solid #F1F5F9; border-radius: 12px; padding: 16px; margin-bottom: 12px; height: 100%;">
+                        <div style="margin-bottom: 8px;"><span style="background: #F1F5F9; color: #64748B; padding: 2px 6px; border-radius: 4px; font-size: 0.7rem; font-weight: 600;">😢 아쉬운 결과</span></div>
+                        <div style="font-size: 0.9rem; font-weight: 700; color: #1E293B; margin-bottom: 4px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{item['title']}</div>
+                        <div style="font-size: 0.8rem; color: #94A3B8; margin-bottom: 8px;">{item['company']}</div>
+                        <div style="font-size: 0.85rem; color: #475569;">
+                            <span style="color:#EF4444; font-weight:600;">{item['missing']:,.0f}원</span> 부족해서<br/>
+                            <span style="color:#EF4444; font-weight:700;">{item['loss']:,.0f}원</span>을 놓쳤습니다.
+                        </div>
+                    </div>
+                    """
+                    st.markdown(html, unsafe_allow_html=True)
 
 
 
-def render_analytics_section(contracts_df: pd.DataFrame, results_df: pd.DataFrame = None, display_period_start: datetime = None, display_period_end: datetime = None):
-    """지표 섹션: 일별 추이(기간한정) 및 상품별 통계(표 형태)"""
+def render_performance_graphs(contracts_df: pd.DataFrame, results_df: pd.DataFrame = None, display_period_start: datetime = None, display_period_end: datetime = None):
+    """실적 분석 추이 (차트 및 통계 테이블)"""
     # 조회 기간이 명시된 경우 해당 기간으로 먼저 타이트하게 필터링
     if display_period_start and display_period_end:
         contracts_df = filter_by_period(contracts_df, display_period_start, display_period_end)
-    # 1. 실적 분석 추이 (8:2 레이아웃)
-    # st.markdown('<div class="white-card">', unsafe_allow_html=True)
     
     # 헤더 및 컨트롤러
-    head_col1, head_col2 = st.columns([2, 1])
-    with head_col1:
-        st.subheader("📈 실적 분석 추이 및 상세 내역")
-    with head_col2:
-        chart_view = st.radio(
+    st.markdown('<div id="charts-section"></div>', unsafe_allow_html=True)
+    st.markdown('<h3 style="margin-top: 0.5rem; margin-bottom: 0.5rem; font-size: 1.2rem; font-weight: 700; color: #1E293B;">📈 분석 추이</h3>', unsafe_allow_html=True)
+    
+    chart_view = st.radio(
             "차트 보기",
             options=["누적 추이", "일별 실적", "모두 보기"],
             index=2, # 모두 보기 디폴트
@@ -1456,12 +1852,9 @@ def render_analytics_section(contracts_df: pd.DataFrame, results_df: pd.DataFram
                 if start_date and end_date:
                     full_date_range = pd.date_range(start=start_date, end=end_date)
                     full_daily_df = pd.DataFrame({'날짜': full_date_range})
-                    # 시간대 차이 방지를 위해 날짜 타입 통일
                     full_daily_df['날짜'] = pd.to_datetime(full_daily_df['날짜']).dt.date
                     filtered_daily['날짜'] = pd.to_datetime(filtered_daily['날짜']).dt.date
-                    
                     merged_df = pd.merge(full_daily_df, filtered_daily, on='날짜', how='left').fillna(0)
-                    # 누적 실적은 0인 날짜에도 이전 값을 유지해야 하므로 ffill 적용 (첫날이 0인 경우 대비 0으로 시작)
                     merged_df['누적실적'] = merged_df['누적실적'].replace(0, pd.NA).ffill().fillna(0)
                 else:
                     merged_df = filtered_daily
@@ -1471,7 +1864,6 @@ def render_analytics_section(contracts_df: pd.DataFrame, results_df: pd.DataFram
                 table_df = merged_df.copy()
                 table_df['날짜_dt'] = pd.to_datetime(table_df['날짜'])
                 table_df['표시날짜'] = table_df['날짜_dt'].apply(lambda x: f"{x.strftime('%m/%d')} ({weekday_map[x.weekday()]})")
-                
                 table_df = table_df.rename(columns={'일실적': '일일', '누적실적': '누적'})
                 
                 st.dataframe(
@@ -1480,7 +1872,7 @@ def render_analytics_section(contracts_df: pd.DataFrame, results_df: pd.DataFram
                         '누적': '{:,.0f}원'
                     }),
                     column_config={
-                        "날짜_dt": None, # 정렬용 숨김 컬럼
+                        "날짜_dt": None, 
                         "표시날짜": st.column_config.TextColumn("날짜", width="small"),
                         "일일": st.column_config.TextColumn("일일", width="small"),
                         "누적": st.column_config.TextColumn("누적", width="small")
@@ -1494,12 +1886,48 @@ def render_analytics_section(contracts_df: pd.DataFrame, results_df: pd.DataFram
             st.info("해당 기간 내 실적이 없습니다.")
     else:
         st.info("데이터가 없습니다.")
-    st.markdown('</div>', unsafe_allow_html=True)
 
-    # 2. 상품별/보험사별 통계 (표 형태)
-    # st.markdown('<div class="white-card">', unsafe_allow_html=True)
-    st.subheader("📊 보험사별/상품별 실적 통계")
+def render_performance_pivot(contracts_df: pd.DataFrame, summary: dict = None, display_period_start: datetime = None, display_period_end: datetime = None):
+    """보험사별/상품별 실적 통계 (메트릭 카드 포함)"""
+    if display_period_start and display_period_end:
+        contracts_df = filter_by_period(contracts_df, display_period_start, display_period_end)
+
+    st.markdown('<h3 style="margin-top: 1rem; margin-bottom: 0.5rem; font-size: 1.2rem; font-weight: 700; color: #1E293B;">📊 실적 통계</h3>', unsafe_allow_html=True)
     
+    # 1. 상단 핵심 지표 영역 (통합 렌더링)
+    if summary and not contracts_df.empty:
+        payout_pct = (summary['총지급예상금액'] / summary['총실적'] * 100) if summary.get('총실적', 0) > 0 else 0
+        
+        # 회사별 실적 계산 (통합/개별 모두 대응)
+        kb_perf = month_filtered_kb = contracts_df[contracts_df['회사'].str.contains('KB', case=False, na=False)]['보험료'].sum() if '회사' in contracts_df.columns else 0
+        sam_perf = month_filtered_sam = contracts_df[contracts_df['회사'].str.contains('삼성', case=False, na=False)]['보험료'].sum() if '회사' in contracts_df.columns else 0
+        
+        if kb_perf == 0 and '원수사' in contracts_df.columns:
+            kb_perf = contracts_df[contracts_df['원수사'].str.contains('KB', case=False, na=False)]['보험료'].sum()
+            sam_perf = contracts_df[contracts_df['원수사'].str.contains('삼성', case=False, na=False)]['보험료'].sum()
+
+        st.markdown(f"""
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 1rem; margin-bottom: 1rem; margin-top: 0.5rem;">
+            <div class="metric-card" style="background: transparent; border: none; box-shadow: none; padding-left: 0; min-height: 90px; display: flex; flex-direction: column; justify-content: flex-start; padding-top: 1rem; gap: 0px;">
+                <p class="label">🏢 총 지급 인센티브</p>
+                <p class="value" style="color: #4F46E5; font-size: 1.5rem;">{summary["총지급예상금액"]:,.0f}원</p>
+                <p class="progress-info" style="color: #10B981; font-weight: 500;">▲ 전체 실적 대비 {payout_pct:.1f}% 지출</p>
+            </div>
+            <div class="metric-card" style="background: transparent; border: none; box-shadow: none; padding-left: 0; min-height: 90px; display: flex; flex-direction: column; justify-content: flex-start; padding-top: 1rem; gap: 0px;">
+                <p class="label">📊 전체 실적 합계</p>
+                <p class="value" style="font-size: 1.5rem;">{summary["총실적"]:,.0f}원</p>
+            </div>
+            <div class="metric-card" style="background: transparent; border: none; box-shadow: none; padding-left: 0; min-height: 90px; display: flex; flex-direction: column; justify-content: flex-start; padding-top: 1rem; gap: 0px;">
+                <p class="label" style="color: #1E40AF;">🔵 삼성화재 실적</p>
+                <p class="value" style="color: #1E40AF; font-size: 1.5rem;">{sam_perf:,.0f}원</p>
+            </div>
+            <div class="metric-card" style="background: transparent; border: none; box-shadow: none; padding-left: 0; min-height: 90px; display: flex; flex-direction: column; justify-content: flex-start; padding-top: 1rem; gap: 0px;">
+                <p class="label" style="color: #B45309;">🟡 KB손해보험 실적</p>
+                <p class="value" style="color: #B45309; font-size: 1.5rem;">{kb_perf:,.0f}원</p>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
     if not contracts_df.empty:
         # 1. 원본 데이터 계산
         pivot_df = contracts_df.pivot_table(
@@ -1510,23 +1938,19 @@ def render_analytics_section(contracts_df: pd.DataFrame, results_df: pd.DataFram
             fill_value=0
         )
         
-        # 2. 보험사별 합계 계산 및 정렬 (금액 높은 순)
+        # 2. 보험사별 합계 계산 및 정렬 (좌측 -> 우측 내림차순: 큰 금액부터 작은 금액)
         company_totals = pivot_df.sum().sort_values(ascending=False)
         sorted_companies = company_totals.index.tolist()
-        
-        # 3. 정렬된 컬럼 순서로 재배치
         pivot_df = pivot_df[sorted_companies]
         
-        # 4. '합계' 열을 맨 앞에 추가
+        # 3. '합계' 열을 맨 앞에 추가
         pivot_df.insert(0, '합계', pivot_df.sum(axis=1))
         
-        # 5. 행 정렬 (인보험, 재물보험, 펫보험, 단체보험, 기타 순)
-        row_order = ['인보험', '재물보험', '펫보험', '단체보험', '기타']
-        existing_row_order = [o for o in row_order if o in pivot_df.index]
-        remaining_rows = [idx for idx in pivot_df.index if idx not in existing_row_order]
-        pivot_df = pivot_df.reindex(existing_row_order + remaining_rows)
+        # 4. 행 정렬 (상단 -> 하단 내림차순: 큰 금액부터 작은 금액)
+        # '합계' 열 기준으로 내림차순 정렬
+        pivot_df = pivot_df.sort_values(by='합계', ascending=False)
         
-        # 6. '합계' 행을 맨 위에 추가
+        # 5. '합계' 행을 맨 위에 추가 (모든 행의 합계)
         total_row = pivot_df.sum().to_frame().T
         total_row.index = ['합계']
         pivot_df = pd.concat([total_row, pivot_df])
@@ -1538,250 +1962,9 @@ def render_analytics_section(contracts_df: pd.DataFrame, results_df: pd.DataFram
         )
     else:
         st.info("통계 데이터가 없습니다.")
-    # st.markdown('</div>', unsafe_allow_html=True)
 
+    st.markdown('<div style="margin-top: 1rem;"></div>', unsafe_allow_html=True)
 
-def render_footer_report(results_df: pd.DataFrame, contracts_df: pd.DataFrame, summary: dict, target_date: datetime):
-    """상단 전략 통합 대시보드 (핵심 지표 + 제언)"""
-    st.markdown(f'<h2 style="margin-bottom: 1.5rem; font-size: 1.5rem; font-weight: 700; color: #1E293B;">📊 {target_date.strftime("%Y년 %m월")} 성과 분석 및 전략</h2>', unsafe_allow_html=True)
-    
-    # 1. 상단 핵심 지표 영역 (메인 대시보드와 통일)
-    payout_pct = (summary['총지급예상금액'] / summary['총실적'] * 100) if summary.get('총실적', 0) > 0 else 0
-    
-    # 회사별 실적 계산 (개별 설계사 기준)
-    agent_kb_perf = 0
-    agent_sam_perf = 0
-    # contracts_df는 이미 전처리된 processed_df가 넘어옴 (preprocess_contracts 완료된 상태)
-    # 날짜 필터링 필수
-    month_filtered = contracts_df[
-        (contracts_df['접수일'] >= pd.Timestamp(summary.get('period_start', target_date.replace(day=1)))) & 
-        (contracts_df['접수일'] <= pd.Timestamp(summary.get('period_end', (target_date + pd.DateOffset(months=1) - pd.Timedelta(days=1)))))
-    ]
-    
-    if '회사' in month_filtered.columns:
-        agent_kb_perf = month_filtered[month_filtered['회사'].str.contains('KB', case=False, na=False)]['보험료'].sum()
-        agent_sam_perf = month_filtered[month_filtered['회사'].str.contains('삼성', case=False, na=False)]['보험료'].sum()
-    elif '원수사' in month_filtered.columns:
-        agent_kb_perf = month_filtered[month_filtered['원수사'].str.contains('KB', case=False, na=False)]['보험료'].sum()
-        agent_sam_perf = month_filtered[month_filtered['원수사'].str.contains('삼성', case=False, na=False)]['보험료'].sum()
-
-    m_col1, m_col2, m_col3, m_col4 = st.columns(4)
-    
-    # CSS Grid로 레이아웃 변경하여 모든 카드 크기 동일하게 강제 (메인 대시보드와 동일한 방식)
-    st.markdown(f"""
-    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
-        <div class="metric-card">
-            <p class="label">💰 총 지급예상금액</p>
-            <p class="value" style="color: #4F46E5;">{summary["총지급예상금액"]:,.0f}원</p>
-            <p class="progress-info" style="color: #10B981; font-weight: 500;">▲ 실적 대비 {payout_pct:.1f}%</p>
-        </div>
-        <div class="metric-card">
-            <p class="label">📊 전체 실적 합계</p>
-            <p class="value">{summary["총실적"]:,.0f}원</p>
-        </div>
-        <div class="metric-card" style="border: 1px solid #FCD34D;">
-            <p class="label" style="color: #B45309;">🟡 KB손해보험 실적</p>
-            <p class="value" style="color: #B45309;">{agent_kb_perf:,.0f}원</p>
-        </div>
-        <div class="metric-card" style="border: 1px solid #93C5FD;">
-            <p class="label" style="color: #1E40AF;">🔵 삼성화재 실적</p>
-            <p class="value" style="color: #1E40AF;">{agent_sam_perf:,.0f}원</p>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
-
-    # 🎯 성과 최적화 가이드 로직 고도화
-    current_time = pd.Timestamp.now().normalize()
-    
-    # 80~100% 사이인 항목들 (중복 제거)
-    potential_df = results_df[(results_df['달성률'] >= 80) & (results_df['달성률'] < 100)].copy()
-    potential_df = potential_df.drop_duplicates(subset=['시상명'])
-    potential_df['end_date_dt'] = pd.to_datetime(potential_df['종료일'])
-    
-    ongoing_imminent = potential_df[potential_df['end_date_dt'] >= current_time]
-    past_missed = potential_df[potential_df['end_date_dt'] < current_time]
-    
-    # [신규] 교차 최적화 분석 (Strategic Optimization)
-    # 이미 만렙을 찍은 시상 -> 기회비용이 있는 시상으로 전환 추천
-    try:
-        optimization_recos = analyze_cross_company_optimization(results_df)
-    except Exception as e:
-        # print(f"Optimization Analysis Error: {e}")
-        optimization_recos = []
-
-    # 가이드 리스트업
-    active_items = []
-    history_items = []
-    switch_items = [] # New list for strategic switches
-
-    # 안전한 값 추출 함수 (스코프 복구)
-    def get_v(row, keys, default=0):
-        for k in keys:
-            if k in row:
-                val = row[k]
-                if pd.notna(val): return val
-        for k in keys:
-            k_lower = k.lower().strip()
-            for actual_k in row.index:
-                if actual_k.lower().strip() == k_lower:
-                    val = row[actual_k]
-                    if pd.notna(val): return val
-        return default
-
-    # 0. 전략적 전환 (Priority 0)
-    for reco in optimization_recos:
-        sat = reco['saturated_item']
-        opp = reco['opportunity_item']
-        
-        # 메시지 포매팅
-        goal_text = "최고구간 도전 가능" if opp.get('is_max_tier') else "상위구간 달성 가능"
-        switch_items.append({
-            'type': 'SWITCH_STRATEGY',
-            'title': f'🚀 {goal_text} 전략 발견!',
-            'company': '전략 제안', # Badge용
-            'sub': f"이미 만점인 <b>[{sat['company']}]</b> 대신<br/><b>[{opp['company']}]</b>에 집중하여 <span style='color:#0284C7; font-weight:700;'>+{opp['marginal_gain']:,.0f}원</span>을 더 챙기세요!",
-            'badge': '✨ 전략적 집중 이동',
-            'badge_class': 'badge-switch',
-            'sat_info': sat,
-            'opp_info': opp
-        })
-
-    # 1. 현재 진행중인 임박 시상 (액티브 가이드)
-    for _, r in ongoing_imminent.head(3).iterrows():
-        m_target = get_v(r, ['목표실적', 'target'])
-        m_perf = get_v(r, ['실적', 'perf'])
-        missing_amt = m_target - m_perf
-        if missing_amt < 0: missing_amt = 0
-        
-        award_name = r.get('시상명', '')
-        company = get_v(r, ['회사', '원수사', '보험사'], '')
-        solidified = results_df[(results_df['시상명'] == award_name) & (results_df['회사'] == company)]['최종지급금액'].max()
-        solidified = solidified if pd.notna(solidified) else 0
-        
-        potential_reward = get_v(r, ['기준보상', '보상금액', '지급금액'])
-        diff_payout = potential_reward - solidified
-        if diff_payout < 0: diff_payout = 0
-        
-        active_items.append({
-            'type': 'IMMINENT',
-            'title': award_name,
-            'company': company,
-            'sub': f"다음 단계까지 <span class='guide-amount-red'>{missing_amt:,.0f}원</span> (달성 시 <span style='color:#059669; font-weight:700;'>+{diff_payout:,.0f}원</span>)",
-            'badge': '⚠️ 달성임박',
-            'badge_class': 'badge-imm'
-        })
-
-    # 2. 과거의 아쉬운 결과 (복기용)
-    for _, r in past_missed.head(3).iterrows():
-        m_target = get_v(r, ['목표실적', 'target'])
-        m_perf = get_v(r, ['실적', 'perf'])
-        missing_amt = m_target - m_perf
-        if missing_amt < 0: missing_amt = 0
-        
-        award_name = r.get('시상명', '')
-        company = get_v(r, ['회사', '원수사', '보험사'], '')
-        solidified = results_df[(results_df['시상명'] == award_name) & (results_df['회사'] == company)]['최종지급금액'].max()
-        solidified = solidified if pd.notna(solidified) else 0
-        
-        potential_reward = get_v(r, ['기준보상', '보상금액', '지급금액'])
-        loss_amt = potential_reward - solidified
-        if loss_amt < 0: loss_amt = 0
-        
-        history_items.append({
-            'title': award_name,
-            'company': company,
-            'sub': f"<span style='color:#EF4444; font-weight:600;'>{missing_amt:,.0f}원</span> 부족해서 <span style='color:#EF4444; font-weight:700;'>{loss_amt:,.0f}원</span>을 놓쳤습니다.",
-            'badge': '😢 아쉬운 결과',
-            'badge_class': 'badge-history'
-        })
-
-    # 가이드 제목 표시
-    if active_items or history_items or switch_items:
-        st.markdown('<p style="font-weight: 700; color: #1E293B; margin-top: 1.5rem; margin-bottom: 0.5rem; font-size: 1.1rem; letter-spacing: -0.02em;">🎯 성과 최적화 가이드</p>', unsafe_allow_html=True)
-        st.markdown('<div style="margin-bottom: 2rem;">', unsafe_allow_html=True)
-
-        if switch_items:
-            for item in switch_items:
-                sat = item['sat_info']
-                opp = item['opp_info']
-                
-                with st.container():
-                     st.markdown(f"""
-<div class="guide-card-switch">
-    <div class="guide-badge-pill {item['badge_class']}">{item['badge']}</div>
-    <div class="guide-desc-text" style="margin-bottom:12px;">
-        <span style="font-weight:600; color:#334155;">{sat['company']}</span>에서 초과 달성 중인 실적을 <br/>
-        <span style="font-weight:600; color:#0284C7;">{opp['company']}</span>로 돌렸을 때의 수익 분석입니다.
-    </div>
-    <div class="switch-container">
-        <div class="switch-box">
-            <div style="color:#94A3B8; font-size: 0.7rem; margin-bottom:2px;">FROM (목표 100% 달성)</div>
-            <div style="font-weight:600; color:#64748B;">{sat['company']}</div>
-            <div style="font-size: 0.8rem; margin: 4px 0;">
-                목표: {sat['max_target']:,.0f}<br/>
-                <span style="color:#F43F5E;">초과: +{sat['surplus']:,.0f}</span>
-            </div>
-            <div class="evidence-tag">{sat['award_name']}</div>
-        </div>
-        <div class="switch-arrow">→</div>
-        <div class="switch-box" style="border-color: #BAE6FD;">
-            <div style="color:#0284C7; font-size: 0.7rem; margin-bottom:2px;">TO ({'최고구간 달성 기회' if opp.get('is_max_tier') else '상위구간 점프 기회'})</div>
-            <div style="font-weight:600; color:#0284C7;">{opp['company']}</div>
-            <div style="font-size: 0.8rem; margin: 4px 0;">
-                도전 목표: {opp['best_tier_target']:,.0f} <br/>
-                <span class="switch-highlight">총 추가 보상: +{opp['marginal_gain']:,.0f}원</span>
-            </div>
-            <div class="evidence-tag">{opp['award_name']}</div>
-        </div>
-    </div>
-    <div style="margin-top:12px; padding: 10px; background: #F0F9FF; border-radius: 8px; font-size: 0.8rem; color: #0369A1;">
-        💡 <b>시뮬레이션 결과:</b><br/>
-        {sat['company']}의 초과 실적인 <b>{sat['surplus']:,.0f}원</b>을 {opp['company']}에 전환 사용한다면, <br/>
-        <b>{opp['best_tier_target']:,.0f}</b> 목표를 즉시 달성하여 <span style="font-weight:700; color:#0284C7;">+{opp['marginal_gain']:,.0f}원</span>의 수익을 추가로 확보할 수 있습니다.
-        {f"<br/>(심지어 <b>{sat['surplus'] - opp['gap_to_best']:,.0f}원</b>의 실적이 더 남습니다!)" if sat['surplus'] > opp['gap_to_best'] else ""}
-    </div>
-</div>
-<div style="margin-bottom: 12px;"></div>
-""", unsafe_allow_html=True)
-        else:
-            # 전략 추천이 안 뜰 때만 관리자용 디버그 출력 (선택 사항)
-            with st.expander("🔎 전략 분석 디버그 (추천이 안 보일 때 확인)"):
-                st.write(f"Saturation Found: {len(optimization_recos) == 0}")
-                st.write("분석 대상 시상 수:", len(results_df))
-                st.write("컬럼 목록:", results_df.columns.tolist())
-
-        # 🔥 지금 바로 기회 섹션
-        if active_items:
-            st.markdown("<div style='font-size:0.85rem; color:#475569; font-weight:600; margin-bottom:6px;'>🔥 지금 바로 챙겨야 할 기회</div>", unsafe_allow_html=True)
-            for item in active_items:
-                with st.container():
-                    st.markdown(f"""
-                    <div class="guide-card-active">
-                        <div class="guide-badge-pill {item['badge_class']}">{item['badge']}</div>
-                        <div class="guide-title-main">{item['title']}</div>
-                        <div class="guide-company-sub" style="margin-bottom:8px;">{item['company']}</div>
-                        <div class="guide-desc-text">{item['sub']}</div>
-                    </div>
-                    <div style="margin-bottom: 12px;"></div>
-                    """, unsafe_allow_html=True)
-
-        # 📚 지난달 복기 섹션
-        if history_items:
-            st.markdown("<div style='font-size:0.85rem; color:#64748B; font-weight:600; margin-top:8px; margin-bottom:6px;'>📚 지난달 복기 (아까운 미달성)</div>", unsafe_allow_html=True)
-            cols_h = st.columns(min(len(history_items), 3))
-            for i, item in enumerate(history_items[:3]):
-                with cols_h[i]:
-                    st.markdown(f"""
-                    <div class="guide-card-history">
-                        <div class="guide-badge-pill {item['badge_class']}">{item['badge']}</div>
-                        <div class="guide-title-main" style="font-size: 0.95rem; color:#475569;">{item['title']}</div>
-                        <div class="guide-company-sub" style="margin-bottom: 8px;">{item['company']}</div>
-                        <div class="guide-desc-text" style="font-size: 0.85rem;">{item['sub']}</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-        
-        st.markdown('</div>', unsafe_allow_html=True)
 
 
 
@@ -1805,14 +1988,26 @@ def render_pivot_analysis(contracts_df: pd.DataFrame):
 
 def main():
     """메인 함수"""
+    # 1. 상단 강제 이동 제어 (조회 버튼 클릭 시에만 작동)
+    if st.session_state.get('trigger_scroll_top'):
+        scroll_js = """<img src="x" onerror="(function(){
+            var targets = [
+                window.parent,
+                window.parent.document.querySelector('.main'),
+                window.parent.document.querySelector('[data-testid=\\'stAppViewContainer\\']'),
+                window.parent.document.querySelector('.stApp')
+            ];
+            function s() { targets.forEach(function(t) { if(t) { if(t.scrollTo) t.scrollTo({top: 0, behavior: 'instant'}); t.scrollTop = 0; } }); }
+            s(); setTimeout(s, 50); setTimeout(s, 150); setTimeout(s, 400);
+        })();" style="display:none;">"""
+        st.markdown(scroll_js, unsafe_allow_html=True)
+        st.session_state.trigger_scroll_top = False
+    
     from data_loader import filter_by_period
     init_session_state()
     
-    # 1. 데이터 로드 여부에 따라 컨트롤 및 매개변수 준비
-    if st.session_state.data_loaded:
-        calc_params = render_main_controls()
-    else:
-        calc_params = None
+    # 1. 고정 헤더 렌더링 (컨트롤 및 책갈피만 포함)
+    calc_params = render_main_controls()
     
     # 데이터가 로드되지 않은 경우 초기 안내 화면
     if not st.session_state.data_loaded:
@@ -1896,25 +2091,29 @@ def main():
                     summary['period_start'] = calc_params['period_start']
                     summary['period_end'] = calc_params['period_end']
                     
-                    if st.session_state.active_menu == "대시보드":
-                        # 통합 렌더링 호출
-                        render_footer_report(results, processed_df, summary, calc_params["target_date"])
-                        
-                        if not results.empty:
-                            render_results_table(results)
-                        else:
-                            st.info("해당 기간에 달성한 시상 내역이 없습니다.")
-                    elif st.session_state.active_menu == "통계분석":
-                        render_analytics_section(processed_df, results, calc_params['period_start'], calc_params['period_end'])
-                        render_pivot_analysis(processed_df)
+                    # 1. 통합 성과 분석 및 전략 (메트릭 + 가이드)
+                    render_footer_report(results, processed_df, summary, calc_params["target_date"])
+                    
+                    # 2. 보험사별/상품별 실적 통계 (메트릭 포함)
+                    st.markdown('<div style="margin-top: 1rem;"></div>', unsafe_allow_html=True)
+                    render_performance_pivot(processed_df, summary, calc_params['period_start'], calc_params['period_end'])
+                    
+                    # 3. 실적 분석 추이 및 그래프
+                    st.markdown('<div style="margin-top: 2rem;"></div>', unsafe_allow_html=True)
+                    render_performance_graphs(processed_df, results, calc_params['period_start'], calc_params['period_end'])
+                    
+                    # 4. 상세 시상 내역 테이블
+                    st.markdown('<div style="margin-top: 2rem;"></div>', unsafe_allow_html=True)
+                    if not results.empty:
+                        render_results_table(results)
+                    else:
+                        st.info("해당 기간에 달성한 시상 내역이 없습니다.")
 
 
                 else:
                     # 전체 보기 (메인 대시보드)
-                    # 데이터 영속성을 위한 스마트 캐싱
                     current_period = (calc_params['period_start'], calc_params['period_end'])
                     
-                    # 1. 계산이 필요한 경우: 기간이 변경됨 OR 캐시된 데이터가 없음 OR 강제 갱신 필요
                     need_recalc = (
                         'last_dashboard_period' not in st.session_state or 
                         st.session_state.last_dashboard_period != current_period or 
@@ -1933,43 +2132,25 @@ def main():
                             st.session_state.last_all_results = all_results_df
                             st.session_state.last_dashboard_period = current_period
                     else:
-                        # 캐시된 결과 사용
                         all_results_df = st.session_state.last_all_results
 
                     agent_payouts = []
-                    # 베이스 전처리 데이터 준비 (지점 필터링 등 위해 상단 배치)
                     processed_df, _ = preprocess_contracts(st.session_state.contracts_df, agent_name=None)
                     if calc_params['product_filter']:
                         processed_df = processed_df[processed_df['분류'].isin(calc_params['product_filter'])]
                         
                     if not all_results_df.empty:
-                        # 필터 적용 (상품 분류 등)
                         filtered_all = all_results_df.copy()
-                        if calc_params['product_filter']:
-                            # calculate_all_agents_awards는 개별 계약 필터링이 이미 반영되어 있지만, 
-                            # 결과물 차원에서의 필터링도 수행 (유형 등)
-                            pass
-                        
-                        # target_month = calc_params['target_date'].month
-                        # month_str = f"{target_month}월"
-                        # filtered_all = filtered_all[filtered_all['시상명'].str.contains(month_str, na=False)]
-                        
                         if calc_params['type_filter']:
                             filtered_all = filtered_all[filtered_all['유형'].isin(calc_params['type_filter'])]
 
-                        # 설계사별 요약 집계 (Group By)
                         agent_groups = filtered_all.groupby('설계사')
-                        
-                        # (전처리는 이미 상단에서 수행됨)
-
                         for agent, group in agent_groups:
                             p_df = processed_df[processed_df['사원명'] == agent]
                             month_filtered_p_df = filter_by_period(p_df, calc_params['period_start'], calc_params['period_end'])
                             t_perf = month_filtered_p_df['보험료'].sum()
-                            
                             total_payout = group[group['선택여부'] == True]['최종지급금액'].sum()
                             
-                            # 놓친 기회 약식 계산
                             missed_opportunity_amt = 0
                             missed_count = 0
                             for _, r in group.iterrows():
@@ -1981,21 +2162,20 @@ def main():
                                          missed_opportunity_amt += (target_pay - current_pay)
                                          missed_count += 1
 
-                            # 회사별 인센티브 및 실적 계산
                             kb_pay = group[(group['회사'].str.contains('KB', case=False, na=False)) & (group['선택여부'] == True)]['최종지급금액'].sum()
                             sam_pay = group[(group['회사'].str.contains('삼성', case=False, na=False)) & (group['선택여부'] == True)]['최종지급금액'].sum()
                             
-                            # 회사별 실적 계산 ('회사' 컬럼이 있는 경우)
                             kb_perf = 0
                             sam_perf = 0
                             if '회사' in month_filtered_p_df.columns:
                                 kb_perf = month_filtered_p_df[month_filtered_p_df['회사'].str.contains('KB', case=False, na=False)]['보험료'].sum()
                                 sam_perf = month_filtered_p_df[month_filtered_p_df['회사'].str.contains('삼성', case=False, na=False)]['보험료'].sum()
-                            elif '원수사' in month_filtered_p_df.columns: # fallback column name
+                            elif '원수사' in month_filtered_p_df.columns:
                                 kb_perf = month_filtered_p_df[month_filtered_p_df['원수사'].str.contains('KB', case=False, na=False)]['보험료'].sum()
                                 sam_perf = month_filtered_p_df[month_filtered_p_df['원수사'].str.contains('삼성', case=False, na=False)]['보험료'].sum()
 
                             if total_payout > 0 or t_perf > 0:
+                                other_perf = max(0, t_perf - kb_perf - sam_perf)
                                 agent_payouts.append({
                                     '설계사': agent,
                                     '소속': p_df['지점'].iloc[0] if not p_df.empty and '지점' in p_df.columns else '-',
@@ -2008,10 +2188,10 @@ def main():
                                     'KB지급액': kb_pay,
                                     '삼성지급액': sam_pay,
                                     'KB실적': kb_perf,
-                                    '삼성실적': sam_perf
+                                    '삼성실적': sam_perf,
+                                    '기타실적': other_perf
                                 })
                         
-                        results = pd.DataFrame() # 전체 모드 UI 호환성
                         summary = {
                             '총지급예상금액': filtered_all[filtered_all['선택여부'] == True]['최종지급금액'].sum(),
                             '시상개수': len(filtered_all.groupby(['회사', '시상명'])),
@@ -2026,135 +2206,153 @@ def main():
                             (processed_df['접수일'] >= pd.Timestamp(calc_params['period_start'])) & 
                             (processed_df['접수일'] <= pd.Timestamp(calc_params['period_end']))
                         ])
-                        # 집계 데이터 세션 저장 (영속성 확보)
                         st.session_state.agg_result_df = pd.DataFrame(agent_payouts)
+                        
+                        # 지점별 집계 데이터 생성
+                        if not st.session_state.agg_result_df.empty:
+                            branch_groups = st.session_state.agg_result_df.groupby('소속').agg({
+                                '총지급액': 'sum',
+                                '총실적': 'sum',
+                                'KB실적': 'sum',
+                                '삼성실적': 'sum',
+                                '기타실적': 'sum'
+                            }).reset_index()
+                            
+                            branch_groups['지급률'] = (branch_groups['총지급액'] / branch_groups['총실적'] * 100).fillna(0)
+                            st.session_state.branch_agg_df = branch_groups
+                        else:
+                            st.session_state.branch_agg_df = pd.DataFrame()
+
                         st.session_state.dashboard_summary = summary
                     
-                    # 렌더링용 집계 데이터 확보 (방금 계산했거나 세션에 있는 데이터)
                     agg_df = st.session_state.get('agg_result_df', pd.DataFrame())
+                    branch_agg_df = st.session_state.get('branch_agg_df', pd.DataFrame())
                     summary = st.session_state.get('dashboard_summary', {})
                     
-                    if not agg_df.empty:
-                        total_company_payout = agg_df['총지급액'].sum()
-                        total_company_perf = agg_df['총실적'].sum()
-                        total_missed = agg_df['놓친기회금액'].sum()
-                        coaching_needed_count = agg_df['코칭필요'].sum()
-                        
-                        total_kb_perf = agg_df['KB실적'].sum()
-                        total_sam_perf = agg_df['삼성실적'].sum()
-                        
-                        company_payout_pct = (total_company_payout / total_company_perf * 100) if total_company_perf > 0 else 0
-                        
-                        # 회사 전체 메트릭 (관리자용 확장)
-                        st.markdown(f"""
-                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 1.5rem; margin-bottom: 2rem;">
-                            <div class="metric-card">
-                                <p class="label">🏢 총 지급 인센티브</p>
-                                <p class="value" style="color: #4F46E5;">{total_company_payout:,.0f}원</p>
-                                <p class="progress-info" style="color: #10B981; font-weight: 500;">▲ 전체 실적 대비 {company_payout_pct:.1f}% 지출</p>
-                            </div>
-                            <div class="metric-card">
-                                <p class="label">📊 전체 실적 합계</p>
-                                <p class="value">{total_company_perf:,.0f}원</p>
-                            </div>
-                             <div class="metric-card" style="border: 1px solid #FCD34D;">
-                                <p class="label" style="color: #B45309;">🟡 KB손해보험 실적</p>
-                                <p class="value" style="color: #B45309;">{total_kb_perf:,.0f}원</p>
-                            </div>
-                            <div class="metric-card" style="border: 1px solid #93C5FD;">
-                                <p class="label" style="color: #1E40AF;">🔵 삼성화재 실적</p>
-                                <p class="value" style="color: #1E40AF;">{total_sam_perf:,.0f}원</p>
-                            </div>
-                        </div>
-                        """, unsafe_allow_html=True)
-                        
+                    # 지점 필터가 설정된 경우 데이터 필터링
+                    selected_branch = st.session_state.get('selected_branch_filter')
+                    if selected_branch:
+                        agg_df = agg_df[agg_df['소속'] == selected_branch]
+                        # summary도 재계산해야 함
+                        summary['총지급예상금액'] = agg_df['총지급액'].sum()
+                        summary['총실적'] = agg_df['총실적'].sum()
+                        # (지점 필터 시 summary의 다른 항목들은 지점 단위 데이터로 표시되도록 render_performance_pivot에서 contracts_df로 처리됨)
 
-                        # --- 설계사별 현황 섹션 ---
-                        status_header_container = st.empty()
+                    if not agg_df.empty:
+                        # 1. 보험사별/상품별 실적 통계 (메트릭 카드 포함)
+                        # 지점 필터된 경우의 contracts_df 준비
+                        branch_filtered_contracts = processed_df.copy()
+                        if selected_branch:
+                             branch_filtered_contracts = branch_filtered_contracts[branch_filtered_contracts['지점'] == selected_branch]
                         
-                        # (Filtering inputs rendered below header)
-                        st.markdown('<div style="margin-bottom: 0.5rem; font-weight: 600; color: #475569; font-size: 0.9rem;">🔍 현황 검색 및 필터</div>', unsafe_allow_html=True)
-                        f_col1, f_col2, f_col3 = st.columns([2, 1.5, 1.5])
-                        with f_col1:
-                            search_q = st.text_input("설계사 또는 지점 검색", placeholder="이름 또는 지점명 입력...", key="agent_search_box", label_visibility="collapsed")
-                        with f_col2:
-                            unique_branches = sorted(agg_df['소속'].unique()) if '소속' in agg_df.columns else []
-                            branch_f = st.multiselect("지점 필터", options=unique_branches, placeholder="지점 선택", key="branch_filter_box", label_visibility="collapsed")
-                        with f_col3:
-                            coaching_filter_opt = st.selectbox("성과 관리 필터", ["전체 설계사 보기", "코칭 대상자만 보기"], index=0, key="coaching_filter_select", label_visibility="collapsed")
-                        
-                        # 데이터 필터링 가공
+                        render_performance_pivot(branch_filtered_contracts, summary, calc_params['period_start'], calc_params['period_end'])
+
+                        # 2. 월간 계약 데이터 상세 보기
+                        with st.expander(f"📅 {calc_params['target_date'].strftime('%Y년 %m월')} {'['+selected_branch+'] ' if selected_branch else ''}전체 계약 내역 상세보기", expanded=False):
+                            target_m = calc_params['target_date'].month
+                            target_y = calc_params['target_date'].year
+                            monthly_contracts = branch_filtered_contracts[
+                                (branch_filtered_contracts['접수일'].dt.year == target_y) & 
+                                (branch_filtered_contracts['접수일'].dt.month == target_m)
+                            ].copy()
+                            
+                            if not monthly_contracts.empty:
+                                # 1. 컬럼 매칭 및 명칭 정리
+                                # 원본에 이미 '사원명'이 있다면 '설계사'를 굳이 '사원명'으로 바꿀 때 중복 발생
+                                display_contracts = monthly_contracts.copy()
+                                
+                                # 보험사 통합 (회사, 보험사, 원수사 중 하나만 선택)
+                                for col in ['회사', '원수사']:
+                                    if col in display_contracts.columns and '보험사' in display_contracts.columns:
+                                        display_contracts = display_contracts.drop(columns=[col])
+                                    elif col in display_contracts.columns:
+                                        display_contracts = display_contracts.rename(columns={col: '보험사'})
+                                
+                                # 사원명 통합 (설계사 -> 사원명)
+                                if '설계사' in display_contracts.columns:
+                                    if '사원명' in display_contracts.columns:
+                                        display_contracts = display_contracts.drop(columns=['설계사'])
+                                    else:
+                                        display_contracts = display_contracts.rename(columns={'설계사': '사원명'})
+                                
+                                # 2. 최종 출력 컬럼 정의 (순서 유지 및 중복 제거)
+                                target_order = ['보험사', '접수일', '사원명', '소속', '상품명', '분류', '보험료', '계약자']
+                                final_cols = []
+                                for c in target_order:
+                                    if c in display_contracts.columns and c not in final_cols:
+                                        final_cols.append(c)
+                                
+                                # 3. 데이터 선택 및 중복 인덱스/컬럼 최종 정리
+                                display_contracts = display_contracts[final_cols].sort_values('접수일')
+                                display_contracts.columns = [str(c) for c in display_contracts.columns] # 컬럼명 문자열 강제
+                                
+                                # 중복 컬럼 최종 확인 및 제거 (Pandas 기능 이용)
+                                display_contracts = display_contracts.loc[:, ~display_contracts.columns.duplicated()]
+                                
+                                st.dataframe(
+                                    display_contracts.style.format({'보험료': '{:,.0f}원'}),
+                                    column_config={
+                                        "접수일": st.column_config.DateColumn("접수일", format="YYYY-MM-DD"),
+                                        "보험료": st.column_config.TextColumn("보험료")
+                                    },
+                                    use_container_width=True,
+                                    hide_index=True
+                                )
+                            else:
+                                st.info("조회된 계약 내역이 없습니다.")
+
+                        st.markdown('<div style="margin-top: 3rem;"></div>', unsafe_allow_html=True)
+
+                        # 3. 실적 분석 추이 (이동됨)
+                        render_performance_graphs(processed_df, display_period_start=calc_params['period_start'], display_period_end=calc_params['period_end'])
+
+                        st.markdown('<div style="margin-top: 3rem;"></div>', unsafe_allow_html=True)
+
+                        st.markdown('<div style="margin-top: 3rem;"></div>', unsafe_allow_html=True)
+
+                        # 4. 팀별(지점별) 현황 (지점 필터가 없을 때만 표시하거나, 항상 표시)
+                        from ui_components import render_agent_list_ui, render_branch_list_ui
+                        if not selected_branch:
+                            st.subheader(f"🏢 팀별 현황 ({len(branch_agg_df)}개 지점)", anchor="teams-section")
+                            render_branch_list_ui(branch_agg_df)
+                            st.markdown('<div style="margin-top: 3rem;"></div>', unsafe_allow_html=True)
+
+                        # 5. 설계사별 현황 데이터 준비 (필터/정렬 전 로직 실행)
                         display_df = agg_df.copy()
-                        if branch_f:
-                            display_df = display_df[display_df['소속'].isin(branch_f)]
-                        if search_q:
-                            q = search_q.strip().lower()
-                            display_df = display_df[
-                                (display_df['설계사'].str.lower().str.contains(q, na=False)) | 
-                                (display_df['소속'].str.lower().str.contains(q, na=False))
-                            ]
-                        if coaching_filter_opt == "코칭 대상자만 보기":
-                            display_df = display_df[display_df['코칭필요'] == True]
                         
-                        # 정렬 로직
+                        # 세션 상태에서 필터 값 미리 가져오기 (헤더의 인원수와 동기화)
+                        search_q_val = st.session_state.get('agent_search_box', "").strip().lower()
+                        branch_f_val = st.session_state.get('branch_filter_box', [])
+                        coaching_f_val = st.session_state.get('coaching_filter_select', "전체 설계사 보기")
+
+                        # 데이터 필터링 (위젯 렌더링 전 수행하여 개수 정확히 측정)
+                        if branch_f_val: display_df = display_df[display_df['소속'].isin(branch_f_val)]
+                        if search_q_val:
+                            display_df = display_df[(display_df['설계사'].str.lower().str.contains(search_q_val, na=False)) | (display_df['소속'].str.lower().str.contains(search_q_val, na=False))]
+                        if coaching_f_val == "코칭 대상자만 보기": display_df = display_df[display_df['코칭필요'] == True]
+                        
                         sort_col = st.session_state.get('agg_sort_col', '총지급액')
                         sort_desc = st.session_state.get('agg_sort_descending', True)
-                        if sort_col in display_df.columns:
-                            display_df = display_df.sort_values(sort_col, ascending=not sort_desc)
-                        display_df = display_df.reset_index(drop=True)
-                        
-                        # 이제 헤더 자리 채우기
-                        status_header_container.subheader(f"👥 설계사별 현황 ({len(display_df)}명)")
-                        
-                        # 설계사 목록 UI
-                        from ui_components import render_agent_list_ui
-                        render_agent_list_ui(display_df)
-                        
-                        # 기존 데이터프레임 코드 제거됨
-                        
+                        if sort_col in display_df.columns: display_df = display_df.sort_values(sort_col, ascending=not sort_desc)
 
+                        # UI 출력 (헤더 -> 레이블 -> 필터 위젯 순)
+                        st.subheader(f"👥 {'['+selected_branch+'] ' if selected_branch else ''}설계사별 현황 ({len(display_df)}명)", anchor="agents-section")
+                        st.markdown('<div style="margin-bottom: 0.5rem; font-weight: 600; color: #475569; font-size: 0.9rem;">🔍 현황 검색 및 필터</div>', unsafe_allow_html=True)
+                        
+                        f_col1, f_col2, f_col3 = st.columns([2, 1.5, 1.5])
+                        with f_col1:
+                            st.text_input("설계사 또는 지점 검색", placeholder="이름 또는 지점명 입력...", key="agent_search_box", label_visibility="collapsed")
+                        with f_col2:
+                            unique_branches = sorted(agg_df['소속'].unique()) if '소속' in agg_df.columns else []
+                            st.multiselect("지점 필터", options=unique_branches, placeholder="지점 선택", key="branch_filter_box", label_visibility="collapsed")
+                        with f_col3:
+                            st.selectbox("성과 관리 필터", ["전체 설계사 보기", "코칭 대상자만 보기"], index=0, key="coaching_filter_select", label_visibility="collapsed")
+                        
+                        st.markdown('<div style="margin-top: 1rem;"></div>', unsafe_allow_html=True)
+                        
+                        render_agent_list_ui(display_df.reset_index(drop=True))
                     else:
                         st.warning("집계된 실적 데이터가 없습니다.")
-                
-                # 지표 및 차트 (조회 기간 전달)
-                render_analytics_section(processed_df, display_period_start=calc_params['period_start'], display_period_end=calc_params['period_end'])
-                
-                # 월간 계약 데이터 상세 보기 (하단 배치, 항상 펼침)
-                with st.expander(f"📅 {calc_params['target_date'].strftime('%Y년 %m월')} 전체 계약 내역 상세보기", expanded=True):
-                    # 해당 월 필터링
-                    target_m = calc_params['target_date'].month
-                    target_y = calc_params['target_date'].year
-                    monthly_contracts = processed_df[
-                        (processed_df['접수일'].dt.year == target_y) & 
-                        (processed_df['접수일'].dt.month == target_m)
-                    ].copy()
-                    
-                    if not monthly_contracts.empty:
-                        rename_map = {'설계사': '사원명', '소속': '소속'}
-                        real_cols = []
-                        # 1. 컬럼 매칭 및 명칭 정리
-                        for col in monthly_contracts.columns:
-                            if col in ['회사', '보험사', '원수사']: rename_map[col] = '보험사'
-                        
-                        # 요청한 순서대로 컬럼 구성
-                        target_order = ['보험사', '접수일', '설계사', '소속', '상품명', '분류', '보험료', '계약자']
-                        for c in target_order:
-                            if c in monthly_contracts.columns: real_cols.append(c)
-                        
-                        display_contracts = monthly_contracts[real_cols].copy().rename(columns=rename_map)
-                        display_contracts = display_contracts.sort_values('접수일')
-                        
-                        st.dataframe(
-                            display_contracts.style.format({
-                                '보험료': '{:,.0f}원'
-                            }),
-                            column_config={
-                                "접수일": st.column_config.DateColumn("접수일", format="YYYY-MM-DD"),
-                                "보험료": st.column_config.TextColumn("보험료")
-                            },
-                            use_container_width=True,
-                            hide_index=True
-                        )
                         st.caption(f"* 총 {len(display_contracts)}건의 계약이 조회되었습니다.")
                 
             except Exception as e:

@@ -37,7 +37,7 @@ def calc_rate_type(contracts: pd.DataFrame, rule_group: pd.DataFrame) -> Dict[st
         '부족금액': 0,
         '지급률': rate,
         'steps_info': [{'step': 1, 'target': 0, 'reward': rate, 'type': '정률', 'description': f'실적의 {rate}% 지급'}],
-        'contracts_info': contracts[['접수일', '상품명', '보험료']].to_dict('records') if not contracts.empty else []
+        'contracts_info': contracts[['접수일', '상품명', '보험료', '계약자', '분류']].to_dict('records') if not contracts.empty else []
     }
 
 
@@ -117,7 +117,7 @@ def calc_step_type(contracts: pd.DataFrame, rule_group: pd.DataFrame) -> Dict[st
             '다음목표': next_target,
             '부족금액': max(shortage, 0),
             'steps_info': steps,
-            'contracts_info': contracts[['접수일', '상품명', '보험료']].to_dict('records') if not contracts.empty else []
+            'contracts_info': contracts[['접수일', '상품명', '보험료', '계약자', '분류']].to_dict('records') if not contracts.empty else []
         }
     else:
         # 1단계도 미달성
@@ -131,7 +131,7 @@ def calc_step_type(contracts: pd.DataFrame, rule_group: pd.DataFrame) -> Dict[st
             '다음목표': first_target,
             '부족금액': max(first_target - total, 0),
             'steps_info': steps,
-            'contracts_info': contracts[['접수일', '상품명', '보험료']].to_dict('records') if not contracts.empty else []
+            'contracts_info': contracts[['접수일', '상품명', '보험료', '계약자', '분류']].to_dict('records') if not contracts.empty else []
         }
 
 
@@ -271,7 +271,7 @@ def calc_continuous_type(contracts: pd.DataFrame, rule_group: pd.DataFrame,
                 'possible_targets': possible_targets_data,
                 'start': p_start,
                 'end': p_end,
-                'contracts': p_contracts[['접수일', '상품명', '보험료']].to_dict('records') if not p_contracts.empty else []
+                'contracts': p_contracts[['접수일', '상품명', '보험료', '계약자', '분류']].to_dict('records') if not p_contracts.empty else []
             }
         
         # 최종 보상 결정 (마지막 구간 기준)
@@ -446,17 +446,29 @@ def calculate_single_award(contracts: pd.DataFrame, rule_group: pd.DataFrame,
     포함상품 = rule.get('포함상품', None)
     상품구분 = rule.get('상품구분', None)
     
-    # 시상 규칙 시트의 C열(상품구분)에 지정된 카테고리만 실적으로 인정
-    # 데이터 로더에서 이미 '분류' 컬럼에 (인보험, 재물보험, 펫보험, 단체보험) 라벨링이 완료된 상태임
+    # 시상 규칙 시트의 [상품구분]열이 있으면 해당 카테고리만 실적으로 인정 (강력 필터)
     if pd.notna(상품구분) and str(상품구분).strip() != '':
-        target_category = str(상품구분).strip()
-        # '인보험', '재물보험', '펫보험', '단체보험' 명칭이 일치하는 계약만 필터링
-        filtered_contracts = contracts[contracts['분류'] == target_category]
-        # 만약 특정 상품명(포함상품)까지 지정되어 있다면 추가 필터링
+        target_category = str(상품구분).replace(' ', '').strip()
+        
+        # 계약 데이터의 분류와 비교 (공백 제거 후 비교)
+        # contracts['분류']는 preprocess_contracts에서 생성됨
+        if '분류' in contracts.columns:
+            # 안전한 비교를 위해 apply 사용
+            mask = contracts['분류'].astype(str).str.replace(' ', '') == target_category
+            filtered_contracts = contracts[mask]
+        else:
+            # 분류 컬럼이 없으면 (예외 상황) 필터링 불가 -> 빈 데이터프레임 혹은 전체? 
+            # 분류 로직은 필수이므로 여기서는 빈 결과가 맞음. 하지만 안전하게 전체 반환보다는 경고 후 빈값?
+            # 여기서는 전체 반환 시 과대 계상 위험이 있으므로 빈 값을 반환하는게 맞음.
+            print("WARNING: '분류' column missing in contracts")
+            filtered_contracts = pd.DataFrame(columns=contracts.columns)
+
+        # 만약 특정 상품명(포함상품)까지 지정되어 있다면 교집합(AND) 조건으로 추가 필터링
         if pd.notna(포함상품) and str(포함상품).strip() != '':
             filtered_contracts = filter_by_products(filtered_contracts, 포함상품, None)
+            
     else:
-        # 상품구분이 비어있는 경우 시상명에서 유추하거나 전체/포함상품 기반으로 필터링
+        # 상품구분이 비어있는 경우 시상명 키워드나 기존 로직 사용
         if '인보험' in str(rule.get('시상명', '')):
             filtered_contracts = contracts[contracts['분류'] == '인보험']
             filtered_contracts = filter_by_products(filtered_contracts, 포함상품, None)
@@ -515,6 +527,7 @@ def calculate_single_award(contracts: pd.DataFrame, rule_group: pd.DataFrame,
     result['회사'] = rule_group['회사'].iloc[0] if '회사' in rule_group.columns else rule.get('회사', '')
     result['시상명'] = rule_group['시상명'].iloc[0] if '시상명' in rule_group.columns else rule.get('시상명', '')
     result['유형'] = award_type
+    result['대상분류'] = str(상품구분).strip() if pd.notna(상품구분) and str(상품구분).strip() != '' else ''
     result['비교시상'] = rule.get('비교시상', None)
     result['시작일'] = rule_start
     result['종료일'] = rule_end
@@ -524,7 +537,7 @@ def calculate_single_award(contracts: pd.DataFrame, rule_group: pd.DataFrame,
     if 'contracts_info' not in result:
         # 시간 필터링된 계약 리스트 포함
         evidence_contracts = filter_by_period(filtered_contracts, calc_start, calc_end)
-        result['contracts_info'] = evidence_contracts[['접수일', '상품명', '보험료']].to_dict('records') if not evidence_contracts.empty else []
+        result['contracts_info'] = evidence_contracts[['접수일', '상품명', '보험료', '계약자', '분류']].to_dict('records') if not evidence_contracts.empty else []
     
     return result
 

@@ -190,7 +190,11 @@ def load_rules_from_url(spreadsheet_url: str, sheet_name: str = "시상규칙") 
         '목표실적': '목표실적',
         '보상금액': '보상금액',
         '비교 시상': '비교시상',
+        '비교시상': '비교시상',
         '포함상품': '포함상품',
+        '상품 구분': '상품구분',
+        '상품구분': '상품구분',
+        '상품종류': '상품구분',
         '시작일': '시작일',
         '종료일': '종료일',
         '연속단계': '연속단계'
@@ -356,46 +360,50 @@ def validate_rules(df: pd.DataFrame) -> Tuple[bool, List[str]]:
 
 def classify_product(row: pd.Series) -> str:
     """
-    상품 자동 분류 (사용자 요청 새 규칙 적용)
-    우선순위: 본인계약 > 펫 > 실손 > 자동차 > 단체 > 재물 > 인보험
+    상품 자동 분류 (최종 보완 버전)
     """
-    상품명 = str(row.get('상품명', '')).strip()
-    상품종류 = str(row.get('상품종류', '')).strip()
-    계약종류 = str(row.get('계약종류', '')).strip()
+    # 0. 데이터 전처리
+    상품명 = str(row.get('상품명', '')).replace(' ', '').strip()
+    상품종류 = str(row.get('상품종류', '')).replace(' ', '').strip()
+    계약종류 = str(row.get('계약종류', '')).replace(' ', '').strip()
     모집인명 = str(row.get('모집인명', '')).strip()
     계약자 = str(row.get('계약자가', row.get('계약자', ''))).strip()
     
-    # 1. 본인계약 (최우선: 모집인명과 계약자가 일치)
+    # 1. 본인계약 (최우선)
     if 모집인명 and 계약자 and 모집인명 == 계약자:
         return '본인계약'
         
-    # 2. 펫보험
-    if '펫' in 상품명:
+    # 2. 펫보험 (키워드 우선)
+    if '펫' in 상품명 or '펫' in 상품종류:
         return '펫보험'
     
-    # 3. 실손보험 (신규 독립 카테고리)
-    if '실손' in 상품종류 or '실손' in 상품명:
+    # 3. 실손보험 (키워드 우선)
+    if '실손' in 상품명 or '실손' in 상품종류:
         return '실손보험'
         
     # 4. 자동차보험
-    if 계약종류 == '자동차' or 상품종류 == '자동차' or '자동차' in 상품명:
+    if '자동차' in 상품명 or '자동차' in 상품종류 or '자동차' in 계약종류:
         return '자동차보험'
     
     # 5. 단체보험
-    if 상품종류 == '단체':
+    if '단체' in 상품종류 or '단체' in 상품명:
         return '단체보험'
     
-    # 6. 재물보험
-    if 상품종류 == '재물성' or any(kw in 상품명 for kw in ['화재', '재산', '배상']):
-        return '재물보험'
-            
-    # 7. 인보험 (보장성이면서 실손/펫 제외)
-    if 상품종류 == '보장성':
-        # 실손/펫은 위에서 이미 걸러졌으므로 여기서는 순수 보장성만 남음
+    # 6. 인보험 (보장성 우선)
+    if '보장성' in 상품종류:
         return '인보험'
+        
+    # 7. 재물보험 (키워드 매칭 - 이미 실손/인보험 등은 걸러짐)
+    if '재물성' in 상품종류 or any(kw in 상품명 for kw in ['재산', '배상']):
+        return '재물보험'
     
-    # 8. 보조 키워드 (인보험/재물보험 보완 판정)
-    if any(kw in 상품명 for kw in ['건강', '암', '상해', '질병']):
+    # 8. 화재 키워드 처리 (회사명 삼성화재 등 오판 방지를 위해 마지막에 배치)
+    if '화재' in 상품명:
+        # 이미 위에서 보장성이나 실손이 걸러졌다면, 남은 '화재' 키워드는 진짜 재물보험일 가능성이 높음
+        return '재물보험'
+        
+    # 9. 인보험 보조 키워드
+    if any(kw in 상품명 for kw in ['건강', '암', '상해', '질병', '종신', '생명']):
         return '인보험'
     
     return '기타'
@@ -503,21 +511,18 @@ def preprocess_contracts(df: pd.DataFrame, agent_name: Optional[str] = None) -> 
         result = agent_contracts
         stats['agent_filtered'] = before - len(result)
     
-    # 계약상태가 '정상' 인 것만 포함 (컬럼이 존재하는 경우)
+    # 계약상태 필터링 제거 (모든 계약 노출 요청)
     if '계약상태' in result.columns:
-        before = len(result)
-        result = result[result['계약상태'] == '정상']
-        stats['debug_info']['invalid_status_removed'] = before - len(result)
+        # result = result[result['계약상태'] == '정상'] # 필터링 비활성화
+        pass
 
-    # 본인 계약 제외 (모집인명 == 계약자)
-    before = len(result)
+    # 본인 계약 필터링 제거 (대신 카테고리로 분류됨)
     self_mask = pd.Series([False] * len(result), index=result.index)
     if '모집인명' in result.columns and '계약자' in result.columns:
         self_mask |= (result['모집인명'] == result['계약자'])
     
     stats['debug_info']['self_contract_count'] = int(self_mask.sum())
-    result = result[~self_mask]
-    stats['self_contracts_removed'] = before - len(result)
+    # result = result[~self_mask] # 필터링 비활성화
     
     # 보험료 0 제외 (안전하게 숫자 변환 후 비교)
     before = len(result)
@@ -527,7 +532,7 @@ def preprocess_contracts(df: pd.DataFrame, agent_name: Optional[str] = None) -> 
         result['보험료'] = pd.to_numeric(result['보험료'], errors='coerce').fillna(0)
         
         stats['debug_info']['premium_dtype'] = str(result['보험료'].dtype)
-        result = result[result['보험료'] > 0]
+        result = result[result['보험료'] != 0]
     stats['zero_premium_removed'] = before - len(result)
     
     # 상품 분류
@@ -556,17 +561,20 @@ def filter_by_products(contracts: pd.DataFrame, 포함상품: Optional[str], 상
     if not pd.isna(상품구분) and str(상품구분).strip() != '':
         category = str(상품구분).strip()
         
-        # 상품분류 컬럼이 있으면 직접 필터링
-        if '상품분류' in contracts.columns:
-            return contracts[contracts['상품분류'] == category]
+        # 분류 컬럼이 있으면 직접 필터링
+        if '분류' in contracts.columns:
+            return contracts[contracts['분류'] == category]
         
-        # 상품분류 컬럼이 없으면 상품명/상품종류로 매칭
+        # 분류 컬럼이 없으면 상품명/상품종류로 매칭
         # 카테고리별 키워드 매핑
         category_keywords = {
             '인보험': ['인', '생명', '상해', '질병', '암', '건강'],
             '펫보험': ['펫', '애완', '반려'],
             '재물보험': ['재물', '화재', '재산', '건물'],
             '단체보험': ['단체'],
+            '실손보험': ['실손'],
+            '자동차보험': ['자동차'],
+            '본인계약': []
         }
         
         keywords = category_keywords.get(category, [category])

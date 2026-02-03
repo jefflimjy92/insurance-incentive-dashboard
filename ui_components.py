@@ -171,14 +171,15 @@ def render_agent_list_ui(agg_df: pd.DataFrame):
     """, unsafe_allow_html=True)
 
     # Header Row
-    h1, h2, h3, h4, h5, h6, h7 = st.columns([1.8, 1.4, 0.8, 1.2, 1.2, 1.2, 0.8])
+    h1, h2, h3, h4, h5, h6, h7, h8 = st.columns([1.6, 1.4, 0.7, 1.1, 0.9, 0.9, 0.9, 0.6])
     with h1: st.markdown("**설계사 / 지점**")
     with h2: st.markdown("**총 예상 인센티브**")
     with h3: st.markdown("**지급률**")
     with h4: st.markdown("**전체 실적**")
-    with h5: st.markdown("**🟡 KB**")
-    with h6: st.markdown("**🔵 삼성**")
-    with h7: st.markdown("**상세**")
+    with h5: st.markdown("**🔵 삼성**")
+    with h6: st.markdown("**🟡 KB**")
+    with h7: st.markdown("**기타**")
+    with h8: st.markdown("**상세**")
     
     st.markdown("<hr style='margin: 0.5rem 0;'>", unsafe_allow_html=True)
 
@@ -187,7 +188,7 @@ def render_agent_list_ui(agg_df: pd.DataFrame):
         return
 
     for idx, row in agg_df.iterrows():
-        c1, c2, c3, c4, c5, c6, c7 = st.columns([1.8, 1.4, 0.8, 1.2, 1.2, 1.2, 0.8])
+        c1, c2, c3, c4, c5, c6, c7, c8 = st.columns([1.6, 1.4, 0.7, 1.1, 0.9, 0.9, 0.9, 0.6])
         
         with c1:
             st.markdown(f"<div><span style='font-weight:700;'>{row['설계사']}</span> <span style='color:#64748B; font-size:0.85rem;'>{row['소속']}</span></div>", unsafe_allow_html=True)
@@ -205,19 +206,83 @@ def render_agent_list_ui(agg_df: pd.DataFrame):
              st.markdown(f"<span style='font-weight:700; color:#334155;'>{row['총실적']:,.0f}원</span>", unsafe_allow_html=True)
             
         with c5:
-             # KB 실적 (보험료 합)
-            kb_val = row.get('KB실적', 0)
-            st.markdown(f"<span style='color:#B45309; font-weight:600;'>{kb_val:,.0f}</span>", unsafe_allow_html=True)
-
-        with c6:
-            # Samsung 실적 (보험료 합)
+             # Samsung 실적 (보험료 합)
             sam_val = row.get('삼성실적', 0)
             st.markdown(f"<span style='color:#1E40AF; font-weight:600;'>{sam_val:,.0f}</span>", unsafe_allow_html=True)
+
+        with c6:
+            # KB 실적 (보험료 합)
+            kb_val = row.get('KB실적', 0)
+            st.markdown(f"<span style='color:#B45309; font-weight:600;'>{kb_val:,.0f}</span>", unsafe_allow_html=True)
             
         with c7:
+            # 기타 실적 (KB, 삼성 제외)
+            other_val = row.get('기타실적', 0)
+            st.markdown(f"<span style='color:#64748B; font-weight:600;'>{other_val:,.0f}</span>", unsafe_allow_html=True)
+
+        with c8:
             # Unified secondary style for all agents
             if st.button("조회", key=f"view_btn_{idx}_{row['설계사']}", type="secondary"):
                 st.session_state.selected_agent = row['설계사']
+                st.session_state.trigger_scroll_top = True
+                st.rerun()
+        
+        st.markdown("<div style='border-bottom: 1px solid #F1F5F9; margin: 0.25rem 0;'></div>", unsafe_allow_html=True)
+
+
+def render_branch_list_ui(branch_df: pd.DataFrame):
+    """
+    Render the list of branches (Teams) with aggregated metrics.
+    """
+    # Header Row
+    h1, h2, h3, h4, h5, h6, h7, h8 = st.columns([1.6, 1.4, 0.7, 1.1, 0.9, 0.9, 0.9, 0.6])
+    with h1: st.markdown("**지점**")
+    with h2: st.markdown("**총 예상 인센티브**")
+    with h3: st.markdown("**지급률**")
+    with h4: st.markdown("**전체 실적**")
+    with h5: st.markdown("**🔵 삼성**")
+    with h6: st.markdown("**🟡 KB**")
+    with h7: st.markdown("**기타**")
+    with h8: st.markdown("**상세**")
+    
+    st.markdown("<hr style='margin: 0.5rem 0;'>", unsafe_allow_html=True)
+
+    if branch_df.empty:
+        st.info("조건에 맞는 지점이 없습니다.")
+        return
+
+    for idx, row in branch_df.iterrows():
+        c1, c2, c3, c4, c5, c6, c7, c8 = st.columns([1.6, 1.4, 0.7, 1.1, 0.9, 0.9, 0.9, 0.6])
+        
+        with c1:
+            st.markdown(f"<div><span style='font-weight:700;'>{row['소속']}</span></div>", unsafe_allow_html=True)
+        
+        with c2:
+            st.markdown(f"<span style='color:#4F46E5; font-weight:700;'>{row['총지급액']:,.0f}원</span>", unsafe_allow_html=True)
+        
+        with c3:
+            st.markdown(f"{row['지급률']:.1f}%")
+        
+        with c4:
+             st.markdown(f"<span style='font-weight:700; color:#334155;'>{row['총실적']:,.0f}원</span>", unsafe_allow_html=True)
+            
+        with c5:
+            sam_val = row.get('삼성실적', 0)
+            st.markdown(f"<span style='color:#1E40AF; font-weight:600;'>{sam_val:,.0f}</span>", unsafe_allow_html=True)
+            
+        with c6:
+            kb_val = row.get('KB실적', 0)
+            st.markdown(f"<span style='color:#B45309; font-weight:600;'>{kb_val:,.0f}</span>", unsafe_allow_html=True)
+            
+        with c7:
+            other_val = row.get('기타실적', 0)
+            st.markdown(f"<span style='color:#64748B; font-weight:600;'>{other_val:,.0f}</span>", unsafe_allow_html=True)
+
+        with c8:
+            if st.button("조회", key=f"branch_view_btn_{idx}_{row['소속']}", type="secondary"):
+                # 지점 필터링 로직: 지점명을 session_state에 저장
+                st.session_state.selected_branch_filter = row['소속']
+                st.session_state.trigger_scroll_top = True
                 st.rerun()
         
         st.markdown("<div style='border-bottom: 1px solid #F1F5F9; margin: 0.25rem 0;'></div>", unsafe_allow_html=True)
