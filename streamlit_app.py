@@ -4,31 +4,45 @@ Streamlit 메인 애플리케이션 (공개 스프레드시트 버전)
 """
 
 import streamlit as st
-import pandas as pd
-import numpy as np
-import altair as alt
-import textwrap
 import os
 import sys
-import pickle
-from datetime import datetime, timedelta
 
-# GitHub/Streamlit Cloud 환경에서 로컬 모듈을 찾을 수 있도록 현재 디렉토리를 경로에 추가
+# [중요] GitHub/Streamlit Cloud 환경에서 로컬 파일들을 찾을 수 있도록 현재 디렉토리를 경로에 추가
 current_dir = os.path.dirname(os.path.abspath(__file__))
 if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
 
-# 로컬 모듈 import
-from data_loader import (
-    load_contracts_from_url, load_rules_from_url,
-    load_contracts_from_csv, load_rules_from_csv,
-    validate_contracts, validate_rules, preprocess_contracts,
-    get_unique_agents, get_unique_companies, get_period_dates,
-    filter_by_period, load_consecutive_rules
-)
-import importlib
-import incentive_engine
-importlib.reload(incentive_engine)
+import pandas as pd
+import numpy as np
+import altair as alt
+import textwrap
+import pickle
+from datetime import datetime, timedelta
+
+# 로컬 모듈 import (sys.path 작업 이후에 실행)
+try:
+    from data_loader import (
+        load_contracts_from_url, load_rules_from_url,
+        load_contracts_from_csv, load_rules_from_csv,
+        validate_contracts, validate_rules, preprocess_contracts,
+        get_unique_agents, get_unique_companies, get_period_dates,
+        filter_by_period, load_consecutive_rules
+    )
+    import incentive_engine
+    import analysis
+    import ui_components
+    
+    # 리로드 처리 (캐싱 방지)
+    import importlib
+    importlib.reload(incentive_engine)
+    importlib.reload(analysis)
+    importlib.reload(ui_components)
+except ImportError as e:
+    st.error(f"⚠️ 모듈 로드 중 에러가 발생했습니다: {e}")
+    st.info(f"현재 경로: {current_dir}")
+    st.info(f"환경 변수 PATH: {sys.path}")
+    st.info(f"디렉토리 내 파일 목록: {os.listdir(current_dir) if os.path.exists(current_dir) else '경로 없음'}")
+    raise e
 from incentive_engine import (
     calculate_all_awards, resolve_competing_awards, get_award_summary,
     calculate_all_agents_awards
@@ -65,8 +79,8 @@ def get_batch_calculation(contracts_df, rules_df, period_start, period_end, comp
 
 # 페이지 설정
 st.set_page_config(
-    page_title="💰 보험 인센티브 대시보드",
-    page_icon="💰",
+    page_title="더바다인슈 실적 현황",
+    page_icon="🎯",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
@@ -800,7 +814,7 @@ def render_main_controls():
         with h_col_left:
             header_html = f"""
             <div style="display:flex; align-items:center; gap:25px;">
-                <div class="header-title-text">🏢 더바다 개인시상분석</div>
+                <div class="header-title-text">🎯 더바다인슈 실적 현황</div>
                 <div style="display:flex; gap:8px;">
                     <a href="#stats-section" class="nav-link">📊 통계</a>
                     <a href="#trend-section" class="nav-link">📈 추이</a>
