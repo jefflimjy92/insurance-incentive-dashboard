@@ -439,16 +439,20 @@ def preprocess_contracts(df: pd.DataFrame, agent_name: Optional[str] = None) -> 
                     return pd.NaT
             result['접수일'] = result['접수일'].apply(parse_date)
 
-    # [설계사] 컬럼 생성
-    if '설계사' not in result.columns:
-        if '모집인명' in result.columns:
-            result['설계사'] = result['모집인명']
+    # [모집인명] 컬럼 표준화 (내부적으로 '모집인명' 통일)
+    if '모집인명' not in result.columns:
+        if '설계사' in result.columns:
+            result['모집인명'] = result['설계사']
         elif '사원명' in result.columns:
-            result['설계사'] = result['사원명']
+            result['모집인명'] = result['사원명']
     
-    # 사원명/설계사 표준화 (공백 제거)
-    if '설계사' in result.columns:
-        result['설계사'] = result['설계사'].astype(str).str.strip()
+    # 내부 로직용 '설계사' 컬럼도 생성하되 '모집인명' 값을 따름
+    result['설계사'] = result['모집인명']
+    
+    # 모집인명 표준화 (공백 제거)
+    if '모집인명' in result.columns:
+        result['모집인명'] = result['모집인명'].astype(str).str.strip()
+        result['설계사'] = result['모집인명']
     if '사원명' in result.columns:
         result['사원명'] = result['사원명'].astype(str).str.strip()
     
@@ -490,11 +494,11 @@ def preprocess_contracts(df: pd.DataFrame, agent_name: Optional[str] = None) -> 
             stats['debug_info']['date_range'] = f"{valid_dates.min()} ~ {valid_dates.max()}"
             stats['debug_info']['null_dates'] = int(result['접수일'].isna().sum())
     
-    # 설계사 필터링
+    # 설계사 필터링 (모집인명 기준)
     if agent_name:
         before = len(result)
         # 디버깅: 해당 설계사 계약 수
-        agent_contracts = result[result['사원명'] == agent_name]
+        agent_contracts = result[result['모집인명'] == agent_name]
         stats['agent_count_before_filter'] = len(agent_contracts)
         result = agent_contracts
         stats['agent_filtered'] = before - len(result)
@@ -505,11 +509,9 @@ def preprocess_contracts(df: pd.DataFrame, agent_name: Optional[str] = None) -> 
         result = result[result['계약상태'] == '정상']
         stats['debug_info']['invalid_status_removed'] = before - len(result)
 
-    # 본인 계약 제외 (사원명 == 계약자 또는 모집인명 == 계약자)
+    # 본인 계약 제외 (모집인명 == 계약자)
     before = len(result)
     self_mask = pd.Series([False] * len(result), index=result.index)
-    if '사원명' in result.columns and '계약자' in result.columns:
-        self_mask |= (result['사원명'] == result['계약자'])
     if '모집인명' in result.columns and '계약자' in result.columns:
         self_mask |= (result['모집인명'] == result['계약자'])
     
