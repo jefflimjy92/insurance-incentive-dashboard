@@ -271,8 +271,7 @@ def calc_continuous_type(contracts: pd.DataFrame, rule_group: pd.DataFrame,
                 'contracts': p_contracts.to_dict('records') if not p_contracts.empty else [],
                 'possible_targets': possible_targets_data,
                 'start': p_start,
-                'end': p_end,
-                'contracts': p_contracts[['접수일', '상품명', '보험료']].to_dict('records') if not p_contracts.empty else []
+                'end': p_end
             }
         
         # 최종 보상 결정 (마지막 구간 기준)
@@ -537,15 +536,17 @@ def calculate_single_award(contracts: pd.DataFrame, rule_group: pd.DataFrame,
         
         # 컬럼 존재 여부 확인 후 선택
         target_cols = ['접수일', '상품명', '보험료']
-        opt_cols = ['계약자', '분류', '회사'] # '사원명'은 보통 필터링되어서 뺌
+        opt_cols = ['계약자', '분류', '회사', '지점', '보험사'] 
         
         for pool_col in opt_cols:
             if pool_col in evidence_contracts.columns:
                 target_cols.append(pool_col)
             elif pool_col == '회사' and '보험사' in evidence_contracts.columns:
                 evidence_contracts['회사'] = evidence_contracts['보험사']
-                target_cols.append('회사')
+                if '회사' not in target_cols: target_cols.append('회사')
                 
+        # 중복 제거 (target_cols 내 중복 방지)
+        target_cols = list(dict.fromkeys(target_cols))
         result['contracts_info'] = evidence_contracts[target_cols].to_dict('records') if not evidence_contracts.empty else []
     
     return result

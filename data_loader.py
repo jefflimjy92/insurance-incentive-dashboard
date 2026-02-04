@@ -478,11 +478,34 @@ def preprocess_contracts(df: pd.DataFrame, agent_name: Optional[str] = None) -> 
         result['설계사'] = result['설계사'].astype(str).str.strip()
     if '사원명' in result.columns:
         result['사원명'] = result['사원명'].astype(str).str.strip()
+
+    # [계약자] 컬럼 표준화
+    if '계약자' not in result.columns:
+        for col in ['계약자명', '고객명', '피보험자']:
+            if col in result.columns:
+                result['계약자'] = result[col]
+                break
+    
+    if '계약자' in result.columns:
+        result['계약자'] = result['계약자'].astype(str).str.strip()
+
+    # [상품종류/계약종류] 표준화 (분류용)
+    if '상품종류' not in result.columns:
+        for col in ['상품군', '상품분류']:
+            if col in result.columns:
+                result['상품종류'] = result[col]
+                break
+    
+    if '계약종류' not in result.columns:
+        for col in ['계약구분', '종목']:
+            if col in result.columns:
+                result['계약종류'] = result[col]
+                break
     
     # [회사] 컬럼 생성
     if '회사' not in result.columns:
         # 우선순위대로 컬럼 선택
-        for col in ['원수사', '보험사', '제휴사']:
+        for col in ['원수사', '보험사', '제휴사', '회사명']:
             if col in result.columns:
                 result['회사'] = result[col]
                 break
@@ -505,7 +528,9 @@ def preprocess_contracts(df: pd.DataFrame, agent_name: Optional[str] = None) -> 
         result['회사'] = result['회사'].astype(str).str.replace(' ', '', regex=False).str.replace('_', '', regex=False)
         mapping = {
             'KB': 'KB손해보험', '삼성': '삼성화재', '메리츠': '메리츠화재', '현대': '현대해상',
-            '한화': '한화손해보험', '흥국': '흥국화재', 'DB': 'DB손해보험', '롯데': '롯데손해보험'
+            '한화': '한화손해보험', '흥국': '흥국화재', 'DB': 'DB손해보험', '롯데': '롯데손해보험',
+            'MG': 'MG손해보험', 'AIG': 'AIG손해보험', 'AXA': 'AXA손해보험', '하나': '하나손해보험',
+            '농협': 'NH농협손해', '교보': '교보생명'
         }
         for k, v in mapping.items():
             result.loc[result['회사'].str.contains(k, na=False), '회사'] = v

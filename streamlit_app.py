@@ -59,7 +59,7 @@ from analysis import (
 
 # --- 캐싱 전용 함수 ---
 @st.cache_data(show_spinner="전체 시상금 계산 중... (수 분이 소요될 수 있습니다)")
-def get_batch_calculation(contracts_df, rules_df, period_start, period_end, company_filter, _v=7):
+def get_batch_calculation(contracts_df, rules_df, period_start, period_end, company_filter, _v=11):
     """모든 설계사의 시상 내역을 한 번에 계산하여 캐싱 (_v: 캐시 갱신용 버전)"""
     # [CRITICAL] 실적 분류(분류 컬럼)를 위해 전처리 필수 수행
     processed_all, _ = preprocess_contracts(contracts_df, agent_name=None)
@@ -1263,7 +1263,7 @@ def get_award_detail_html(group, period_stats, rows_df):
                         <th style="padding: 0.5rem;">기간</th>
                         <th style="padding: 0.5rem; text-align: right;">목표</th>
                         <th style="padding: 0.5rem; text-align: right;">실적</th>
-                        <th style="padding: 0.5rem; text-align: right;">지급액</th>
+                        <th style="padding: 0.5rem; text-align: right;">시상금</th>
                         <th style="padding: 0.5rem; text-align: center;">달성률</th>
                         <th style="padding: 0.5rem; text-align: center;">상태</th>
                     </tr>
@@ -1294,10 +1294,17 @@ def get_award_detail_html(group, period_stats, rows_df):
             is_over = perf > target and target > 0
             is_achieved = payout > 0 or exp_pay > 0 or achievement >= 100
             
-            # Payout Display
-            payout_html = f"{payout:,.0f}"
-            if payout == 0 and exp_pay > 0:
-                payout_html = f"<span style='color:#F59E0B; font-size:0.75rem;'>(예상 {exp_pay:,.0f})</span>"
+            # 시상금 (Base Award Amount) - 달성 여부와 무관하게 규정된 금액 노출
+            base_reward = row.get('기준보상', 0)
+            if base_reward == 0 and payout > 0: base_reward = payout # Fallback
+            
+            payout_html = f"{base_reward:,.0f}"
+            
+            # 최종 확정된 지급액이 있다면 강조 처리
+            if payout > 0:
+                payout_html = f"<span style='color: #10B981; font-weight: 700;'>{payout:,.0f}</span>"
+            elif exp_pay > 0:
+                payout_html = f"<span style='color: #F59E0B; font-weight: 700;'>{exp_pay:,.0f}</span><br><span style='font-size: 0.65rem; color: #F59E0B;'>(예상)</span>"
             
             # Status Badge
             if is_over:
@@ -1372,15 +1379,30 @@ def get_award_detail_html(group, period_stats, rows_df):
         # 최신순 정렬
         unique_contracts.sort(key=lambda x: str(x.get('접수일', '')), reverse=True)
         
+        # [Safe Get] NaN 및 None 처리 강화
+        def get_val(item, keys, default='-'):
+            for k in keys:
+                val = item.get(k)
+                if pd.notna(val) and val != '' and val is not None:
+                    # 0이나 0.0 같은 숫자형 데이터가 문자열 필드(회사, 계약자 등)에 들어오는 경우 방지
+                    if isinstance(val, (int, float)) and val == 0: continue
+                    return str(val).strip()
+            return default
+
         for c in unique_contracts[:50]: # 상위 50개
             date_str = pd.to_datetime(c.get('접수일')).strftime('%Y-%m-%d') if c.get('접수일') else '-'
+            
+            c_company = get_val(c, ['회사', '보험사', '원수사', '제휴사'])
+            c_category = get_val(c, ['분류', '상품분류'])
+            c_contractor = get_val(c, ['계약자', '계약자명', '고객명', '피보험자'])
+            
             html_parts.append(f"""
                 <tr style="border-bottom: 1px solid #F9FAFB;">
                     <td style="padding: 0.4rem 0.5rem;">{date_str}</td>
-                    <td style="padding: 0.4rem 0.5rem;">{c.get('회사', c.get('원수사', '-'))}</td>
-                    <td style="padding: 0.4rem 0.5rem;">{c.get('분류', '-')}</td>
+                    <td style="padding: 0.4rem 0.5rem;">{c_company}</td>
+                    <td style="padding: 0.4rem 0.5rem;">{c_category}</td>
                     <td style="padding: 0.4rem 0.5rem;">{c.get('상품명', '-')}</td>
-                    <td style="padding: 0.4rem 0.5rem;">{c.get('계약자', '-')}</td>
+                    <td style="padding: 0.4rem 0.5rem;">{c_contractor}</td>
                     <td style="padding: 0.4rem 0.5rem; text-align: right;">{c.get('보험료', 0):,.0f}</td>
                 </tr>
             """)
@@ -1610,7 +1632,12 @@ def render_results_table(results_df: pd.DataFrame):
                 """
 
         # 유형 스타일
-        type_styles = {'연속': {'bg': '#EEF2FF', 'color': '#4F46E5'}, '정률': {'bg': '#FEF3C7', 'color': '#B45309'}, '구간': {'bg': '#DBEAFE', 'color': '#1E40AF'}}
+        type_styles = {
+            '연속형': {'bg': '#EEF2FF', 'color': '#4F46E5'}, 
+            '정률형': {'bg': '#FEF3C7', 'color': '#B45309'}, 
+            '계단형': {'bg': '#DBEAFE', 'color': '#1E40AF'},
+            '합산형': {'bg': '#F1F5F9', 'color': '#475569'}
+        }
         type_style = type_styles.get(group['type'], {'bg': '#F3F4F6', 'color': '#374151'})
         
         s_date = group.get('start_date')
