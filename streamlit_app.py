@@ -702,105 +702,26 @@ def render_main_controls():
     m_idx = st.session_state.shadow_month - 1
     if m_idx < 0 or m_idx > 11: m_idx = 0
 
-    # [CRITICAL] 고정 헤더 영역 정의 (최종 디자인: 그림자 구분선 + 마진 축소)
+    # [CRITICAL] 폰트 및 기본 여백 설정 (헤더 스타일은 ui_components에서 통합 관리)
     st.markdown("""
         <style>
-        /* 1. 기본 헤더 및 불필요 요소 제거 */
+        @import url('https://fonts.googleapis.com/css2?family=Pretendard:wght@400;600;800&display=swap');
+        
+        .stApp, .stApp [data-testid="stMarkdownContainer"] p, .stApp [data-testid="stMarkdownContainer"] span { 
+            font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, sans-serif !important; 
+        }
+        
+        h1, h2, h3, h4, h5, h6, .header-title {
+            font-family: 'Pretendard', sans-serif !important;
+        }
+
         header[data-testid="stHeader"], [data-testid="stDecoration"], footer { display: none !important; }
         [data-testid="stAppViewContainer"] { padding-top: 0 !important; }
         
-        /* 2. 본문 상단 여백 최소화 (헤더 바로 아래 시작) */
         .main .block-container {
-            padding-top: 65px !important; /* 헤더 높이(60px) + 여백(5px) */
+            padding-top: 65px !important;
             margin-top: 0 !important;
             max-width: 100% !important;
-        }
-
-        /* 3. 상단 고정 헤더 (그림자 효과 추가) */
-        div[data-testid="stVerticalBlockBorderWrapper"]:has(.fixed-header-anchor) {
-            position: fixed !important;
-            top: 0 !important;
-            left: 0 !important;
-            width: 100vw !important;
-            background-color: #FFFFFF !important;
-            z-index: 999999 !important;
-            border-bottom: 1px solid #E2E8F0;
-            padding: 0 40px !important;
-            height: 60px !important;
-            display: flex !important;
-            align-items: center !important;
-            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.08) !important; /* 그림자 강도 증가 */
-            margin: 0 !important;
-            transform: none !important;
-        }
-        
-        /* 내부 컨텐츠 배치 */
-        div[data-testid="stVerticalBlockBorderWrapper"]:has(.fixed-header-anchor) div[data-testid="stHorizontalBlock"] {
-            align-items: center !important;
-            gap: 1.5rem !important;
-            width: 100% !important;
-            flex-wrap: nowrap !important;
-        }
-
-        /* 위젯 라벨 숨김 */
-        div[data-testid="stVerticalBlockBorderWrapper"]:has(.fixed-header-anchor) label { display: none !important; }
-        div[data-testid="stVerticalBlockBorderWrapper"]:has(.fixed-header-anchor) div[data-testid="stSelectbox"] {
-            margin: 0 !important;
-            min-width: 100px !important;
-        }
-        
-        /* 네비게이션 버튼 */
-        .nav-link {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 4px 14px;
-            border-radius: 8px;
-            font-size: 0.88rem;
-            font-weight: 600;
-            color: #64748B;
-            text-decoration: none;
-            border: 1px solid #E2E8F0;
-            background: #FFFFFF;
-            transition: all 0.2s;
-            height: 34px;
-            white-space: nowrap !important;
-        }
-        .nav-link:hover { color: #4F46E5; background: #F8FAFC; border-color: #CBD5E1; }
-        
-        /* 타이틀 */
-        .header-title-text {
-            font-weight: 800;
-            font-size: 1.2rem;
-            color: #1E293B;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            white-space: nowrap !important;
-            flex-shrink: 0;
-        }
-
-        /* [추가] 뒤로가기 버튼 래퍼 및 스타일 (깔끔한 정렬용) */
-        .header-back-wrapper {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            height: 100%;
-        }
-        .header-back-wrapper button {
-            background: transparent !important;
-            border: none !important;
-            padding: 0 !important;
-            width: 32px !important;
-            height: 32px !important;
-            font-size: 1.2rem !important;
-            color: #4F46E5 !important;
-            box-shadow: none !important;
-            transition: all 0.2s ease;
-        }
-        .header-back-wrapper button:hover {
-            background: #F1F5F9 !important;
-            border-radius: 8px !important;
         }
         </style>
     """, unsafe_allow_html=True)
@@ -2468,6 +2389,27 @@ def main():
                     
                     render_metrics(summary)
                     render_product_statistics(team_contracts)
+                    
+                    # 3. 월간 팀 계약 데이터 상세 보기 (Expander)
+                    with st.expander(f"📅 {calc_params['target_date'].strftime('%Y년 %m월')} {team_name} 전체 계약 내역 상세보기", expanded=False):
+                        if not team_contracts.empty:
+                            # 컬럼명 표준화 및 가공 로직
+                            rename_map = {'설계사': '사원명', '모집인명': '사원명', '회사': '보험사', '원수사': '보험사'}
+                            display_contracts = team_contracts.rename(columns=rename_map)
+                            display_contracts = display_contracts.loc[:, ~display_contracts.columns.duplicated()]
+                            
+                            target_cols = ['접수일', '사원명', '보험사', '분류', '상품명', '보험료', '계약자']
+                            valid_cols = [c for c in target_cols if c in display_contracts.columns]
+                            display_contracts = display_contracts[valid_cols].sort_values('접수일', ascending=False)
+                            
+                            st.dataframe(
+                                display_contracts.style.format({'보험료': '{:,.0f}원'}),
+                                column_config={"접수일": st.column_config.DateColumn("접수일", format="YYYY-MM-DD")},
+                                use_container_width=True, hide_index=True
+                            )
+                            st.caption(f"* 총 {len(display_contracts)}건의 계약이 조회되었습니다.")
+                        else:
+                            st.info("해당 기간의 계약 내역이 없습니다.")
                     
                     # 3. 추이 차트 (Team Scope)
                     # render_performance_charts expects filtered processed_df? No, it takes full processed_df and filters inside? 

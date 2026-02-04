@@ -268,24 +268,23 @@ def render_sticky_header(title, is_detail=False, back_callback=None, nav_items=N
             height: 0 !important;
         }
         
-        /* Sticky Container - Logic: Ultra Compact & Flush Top */
-        div[data-testid="stVerticalBlock"] > div:has(.sticky-header-marker) {
+        /* Sticky Container - Logic: Only show the one that matches the current mode */
+        div[data-testid="stVerticalBlock"] > div:has(.sticky-header-marker-main),
+        div[data-testid="stVerticalBlock"] > div:has(.sticky-header-marker-detail) {
             position: sticky;
             top: 0;
             z-index: 9999;
             background: transparent;
-            
-            /* User Requested Adjustment */
             margin-top: -2.65rem; 
-            padding-top: 0.5rem; /* Ultra slim */
-            padding-bottom: 0.5rem; /* Ultra slim */
+            padding-top: 0.5rem;
+            padding-bottom: 0.5rem;
             margin-bottom: 1.5rem;
-            
             overflow: visible;
         }
 
         /* The Full-Bleed Background Layer */
-        div[data-testid="stVerticalBlock"] > div:has(.sticky-header-marker)::before {
+        div[data-testid="stVerticalBlock"] > div:has(.sticky-header-marker-main)::before,
+        div[data-testid="stVerticalBlock"] > div:has(.sticky-header-marker-detail)::before {
             content: "";
             position: absolute;
             top: 0;
@@ -299,8 +298,12 @@ def render_sticky_header(title, is_detail=False, back_callback=None, nav_items=N
             z-index: -1; 
         }
 
+        /* [CRITICAL] Prevent overlap: Hide mismatched markers immediately */
+        body:not(:has(.active-marker-detail)) div:has(.sticky-header-marker-detail) { display: none !important; }
+        body:has(.active-marker-detail) div:has(.sticky-header-marker-main) { display: none !important; }
+
         /* Inner Content Wrapper */
-        div[data-testid="stVerticalBlock"] > div:has(.sticky-header-marker) > div {
+        div[data-testid="stVerticalBlock"] > div:has([class*="sticky-header-marker"]) > div {
              width: 100%;
         }
 
@@ -417,10 +420,16 @@ def render_sticky_header(title, is_detail=False, back_callback=None, nav_items=N
     </style>
     """, unsafe_allow_html=True)
 
-    with st.container():
-        st.markdown('<div class="sticky-header-marker"></div>', unsafe_allow_html=True)
+    mode = "detail" if is_detail else "main"
+    container_key = f"sticky_header_container_{mode}"
+    
+    # Active mode marker for CSS targeting
+    if is_detail:
+        st.markdown('<div class="active-marker-detail" style="display:none;"></div>', unsafe_allow_html=True)
+
+    with st.container(key=container_key):
+        st.markdown(f'<div class="sticky-header-marker-{mode}"></div>', unsafe_allow_html=True)
         
-        # Adjust column ratios to give space for controls on the right
         # c1: Left (Title/Nav), c2: Spacer, c3: Right (Controls)
         c1, c2, c3 = st.columns([5, 0.5, 3.5], gap="small")
         
