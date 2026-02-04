@@ -243,6 +243,15 @@ def render_sticky_header(title, is_detail=False, back_callback=None, nav_items=N
             padding-bottom: 5rem !important;
         }
         
+        /* Scroll behavior and offset for sticky header */
+        html {
+            scroll-behavior: smooth;
+        }
+        
+        [id] {
+            scroll-margin-top: 160px !important;
+        }
+        
         /* completely hide Streamlit's default header and decoration bar */
         header, [data-testid="stHeader"] { 
             display: none !important; 
