@@ -2724,23 +2724,24 @@ def main():
                                 # 팀별 행 렌더링
                                 for t_idx, t_row in sorted_team_summary.iterrows():
                                     with st.container():
-                                        cols = st.columns([1.2, 1.2, 0.8, 1.2, 1, 1, 1, 0.8])
+                                        cols = st.columns([1.2, 1.2, 0.8, 1.2, 1, 1, 1, 0.8], vertical_alignment="center")
                                         with cols[0]:
-                                            st.markdown(f"<div style='font-weight:600; color:#1F2937; padding-top:10px;'>{t_row['소속']} <span style='font-size:0.8em; color:#9CA3AF; font-weight:400;'>({t_row['설계사']}명)</span></div>", unsafe_allow_html=True)
+                                            st.markdown(f"<div style='font-weight:600; color:#1F2937;'>{t_row['소속']} <span style='font-size:0.8em; color:#9CA3AF; font-weight:400;'>({t_row['설계사']}명)</span></div>", unsafe_allow_html=True)
                                         with cols[1]:
-                                            st.markdown(f"<div style='text-align:right; font-weight:700; color:#2563EB; padding-top:10px;'>{t_row['총지급액']:,.0f}</div>", unsafe_allow_html=True)
+                                            st.markdown(f"<div style='text-align:right; font-weight:700; color:#2563EB;'>{t_row['총지급액']:,.0f}</div>", unsafe_allow_html=True)
                                         with cols[2]:
-                                            st.markdown(f"<div style='text-align:right; color:#4B5563; padding-top:10px;'>{t_row['지급률']:.1f}%</div>", unsafe_allow_html=True)
+                                            st.markdown(f"<div style='text-align:right; color:#4B5563;'>{t_row['지급률']:.1f}%</div>", unsafe_allow_html=True)
                                         with cols[3]:
-                                            st.markdown(f"<div style='text-align:right; font-weight:600; color:#111827; padding-top:10px;'>{t_row['총실적']:,.0f}</div>", unsafe_allow_html=True)
+                                            st.markdown(f"<div style='text-align:right; font-weight:600; color:#111827;'>{t_row['총실적']:,.0f}</div>", unsafe_allow_html=True)
                                         with cols[4]:
-                                            st.markdown(f"<div style='text-align:right; color:#6B7280; font-size:0.9rem; padding-top:10px;'>{t_row['삼성실적']:,.0f}</div>", unsafe_allow_html=True)
+                                            st.markdown(f"<div style='text-align:right; color:#6B7280; font-size:0.9rem;'>{t_row['삼성실적']:,.0f}</div>", unsafe_allow_html=True)
                                         with cols[5]:
-                                            st.markdown(f"<div style='text-align:right; color:#6B7280; font-size:0.9rem; padding-top:10px;'>{t_row['KB실적']:,.0f}</div>", unsafe_allow_html=True)
+                                            st.markdown(f"<div style='text-align:right; color:#6B7280; font-size:0.9rem;'>{t_row['KB실적']:,.0f}</div>", unsafe_allow_html=True)
                                         with cols[6]:
-                                            st.markdown(f"<div style='text-align:right; color:#6B7280; font-size:0.9rem; padding-top:10px;'>{t_row['기타실적']:,.0f}</div>", unsafe_allow_html=True)
+                                            st.markdown(f"<div style='text-align:right; color:#6B7280; font-size:0.9rem;'>{t_row['기타실적']:,.0f}</div>", unsafe_allow_html=True)
                                         with cols[7]:
-                                            if st.button("상세", key=f"team_list_btn_{t_idx}", use_container_width=True):
+                                            # Removed use_container_width to keep it small and centered
+                                            if st.button("상세", key=f"team_list_btn_{t_idx}"):
                                                 st.session_state.selected_team = t_row['소속']
                                                 st.rerun()
                                         st.markdown("<div style='border-bottom:1px solid #F3F4F6; margin-bottom:5px;'></div>", unsafe_allow_html=True)
@@ -2806,12 +2807,12 @@ def main():
                                 # 설계사별 행 렌더링
                                 for idx, row in sorted_agent_df.iterrows():
                                     with st.container():
-                                        cols = st.columns([1.2, 1.2, 0.8, 1.2, 1, 1, 1, 0.8])
+                                        cols = st.columns([1.2, 1.2, 0.8, 1.2, 1, 1, 1, 0.8], vertical_alignment="center")
                                         
                                         # [설계사 / 지점]
                                         with cols[0]:
                                             st.markdown(f"""
-                                            <div style='padding-top:10px;'>
+                                            <div>
                                                 <span style='font-weight:600; color:#1F2937;'>{row['설계사']}</span>
                                                 <span style='font-size:0.8em; color:#6B7280; display:block;'>{row['소속']}</span>
                                             </div>
@@ -2819,19 +2820,20 @@ def main():
                                             
                                         # 수수료/인센티브
                                         with cols[1]:
-                                            st.markdown(f"<div style='text-align:right; font-weight:700; color:#4F46E5; padding-top:10px;'>{row['총지급액']:,.0f}</div>", unsafe_allow_html=True)
+                                            st.markdown(f"<div style='text-align:right; font-weight:700; color:#4F46E5;'>{row['총지급액']:,.0f}</div>", unsafe_allow_html=True)
                                         with cols[2]:
-                                            st.markdown(f"<div style='text-align:right; color:#4B5563; padding-top:10px;'>{row['지급률']:.1f}%</div>", unsafe_allow_html=True)
+                                            st.markdown(f"<div style='text-align:right; color:#4B5563;'>{row['지급률']:.1f}%</div>", unsafe_allow_html=True)
                                         with cols[3]:
-                                            st.markdown(f"<div style='text-align:right; font-weight:600; color:#111827; padding-top:10px;'>{row['총실적']:,.0f}</div>", unsafe_allow_html=True)
+                                            st.markdown(f"<div style='text-align:right; font-weight:600; color:#111827;'>{row['총실적']:,.0f}</div>", unsafe_allow_html=True)
                                         with cols[4]:
-                                            st.markdown(f"<div style='text-align:right; color:#6B7280; font-size:0.9rem; padding-top:10px;'>{row['삼성실적']:,.0f}</div>", unsafe_allow_html=True)
+                                            st.markdown(f"<div style='text-align:right; color:#6B7280; font-size:0.9rem;'>{row['삼성실적']:,.0f}</div>", unsafe_allow_html=True)
                                         with cols[5]:
-                                            st.markdown(f"<div style='text-align:right; color:#6B7280; font-size:0.9rem; padding-top:10px;'>{row['KB실적']:,.0f}</div>", unsafe_allow_html=True)
+                                            st.markdown(f"<div style='text-align:right; color:#6B7280; font-size:0.9rem;'>{row['KB실적']:,.0f}</div>", unsafe_allow_html=True)
                                         with cols[6]:
-                                            st.markdown(f"<div style='text-align:right; color:#6B7280; font-size:0.9rem; padding-top:10px;'>{row['기타실적']:,.0f}</div>", unsafe_allow_html=True)
+                                            st.markdown(f"<div style='text-align:right; color:#6B7280; font-size:0.9rem;'>{row['기타실적']:,.0f}</div>", unsafe_allow_html=True)
                                         with cols[7]:
-                                            if st.button("조회", key=f"agent_list_btn_{idx}", use_container_width=True):
+                                            # Removed use_container_width to keep it small and centered
+                                            if st.button("상세", key=f"agent_list_btn_{idx}"):
                                                 st.session_state.selected_agent = row['설계사']
                                                 st.rerun()
                                         

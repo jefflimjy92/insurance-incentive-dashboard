@@ -344,16 +344,14 @@ def render_sticky_header(title, is_detail=False, back_callback=None, nav_items=N
 
         /* Adjust for back button and custom detail buttons */
         .stButton {
-            margin-top: 0 !important;
-            margin-bottom: 0 !important;
-            display: flex;
-            justify-content: center;
+            margin: 0 !important;
         }
+        
+        /* Global Button Style (Premium Look) */
         .stButton button {
             border: 1px solid #E2E8F0 !important;
             background: white !important;
             padding: 2px 10px !important;
-            margin-top: 16px !important; /* Visual fix to prevent sticking to header */
             color: #64748b !important;
             font-size: 0.8rem !important;
             font-weight: 600 !important;
@@ -362,19 +360,59 @@ def render_sticky_header(title, is_detail=False, back_callback=None, nav_items=N
             height: auto !important;
             min-height: unset !important;
             line-height: 1.4 !important;
-            width: auto !important;
         }
+
+        /* Specific alignment for ALL list Detail buttons to center them in rows */
+        .stElementContainer[class*="list_btn"] .stButton button,
+        .stElementContainer[class*="view_btn"] .stButton button {
+            margin-top: 16px !important;
+            width: auto !important;
+            display: block;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
         .stButton button:hover {
             color: #4f46e5 !important;
             border-color: #4f46e5 !important;
             background: #f5f3ff !important;
         }
-        /* Specific override for back arrow if needed */
-        div:has(> button[key*="back_btn"]) button {
+
+        /* Specific override for back arrow - Target the Streamlit key class */
+        .element-container[class*="st-key-back_btn"] {
+            display: inline-block !important;
+            width: auto !important;
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+        .element-container[class*="st-key-back_btn"] button {
             border: none !important;
             background: transparent !important;
-            font-size: 1.2rem !important;
-            margin-top: 0 !important; /* Keep back button aligned */
+            background-color: transparent !important;
+            font-size: 1.4rem !important;
+            box-shadow: none !important;
+            padding: 0 !important;
+            margin: 0 !important;
+            min-height: unset !important;
+            height: auto !important;
+            line-height: inherit !important;
+            vertical-align: middle !important;
+            width: auto !important;
+            display: flex !important;
+            align-items: center !important;
+            justify-content: center !important;
+        }
+        .element-container[class*="st-key-back_btn"] button:hover {
+            background: transparent !important;
+            background-color: transparent !important;
+            color: #4f46e5 !important;
+            box-shadow: none !important;
+            border: none !important;
+        }
+        /* Specific Fix: Streamlit's element container adds hidden padding/margins */
+        .element-container:has(.stButton), .stElementContainer:has(.stButton) {
+            margin: 0 !important;
+            padding: 0 !important;
         }
     </style>
     """, unsafe_allow_html=True)
@@ -401,7 +439,7 @@ def render_sticky_header(title, is_detail=False, back_callback=None, nav_items=N
                             st.rerun()
                 # Title Column
                 with sub_cols[1]:
-                    st.markdown(f'<div class="header-title" style="margin-top: 5px;">{title}</div>', unsafe_allow_html=True)
+                    st.markdown(f'<div class="header-title">{title}</div>', unsafe_allow_html=True)
             else:
                 # Main Title Column
                 with sub_cols[0]:
