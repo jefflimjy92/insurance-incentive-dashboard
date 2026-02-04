@@ -1790,19 +1790,9 @@ def render_performance_charts(contracts_df: pd.DataFrame, results_df: pd.DataFra
         from data_loader import filter_by_period
         contracts_df = filter_by_period(contracts_df, display_period_start, display_period_end)
     
-    # 헤더 및 컨트롤러
-    head_col1, head_col2 = st.columns([2, 1])
-    with head_col1:
-        st.subheader("📈 실적 분석 추이 및 상세 내역")
-    with head_col2:
-        chart_view = st.radio(
-            "차트 보기",
-            options=["누적 추이", "일별 실적", "모두 보기"],
-            index=2, # 모두 보기 디폴트
-            horizontal=True,
-            key="chart_view_toggle",
-            label_visibility="collapsed"
-        )
+    # 헤더
+    st.subheader("📈 실적 분석 추이 및 상세 내역")
+    chart_view = "모두 보기" # 고정값으로 설정 (버튼 제거)
     
     # 데이터 준비 및 필터링
     start_date = display_period_start
@@ -1813,63 +1803,158 @@ def render_performance_charts(contracts_df: pd.DataFrame, results_df: pd.DataFra
 
     daily_df = get_daily_trend(contracts_df)
     if not daily_df.empty:
+        # Convert to datetime and ensure it's at midnight to avoid timezone shifts in Altair
         daily_df['날짜'] = pd.to_datetime(daily_df['날짜'])
+        
         filtered_daily = daily_df
         if start_date and end_date:
             filtered_daily = daily_df[(daily_df['날짜'] >= pd.to_datetime(start_date)) & 
                                      (daily_df['날짜'] <= pd.to_datetime(end_date))]
         
         if not filtered_daily.empty:
+            # [CRITICAL] Full month expansion: Ensure chart shows all days from start to end
+            # This makes the chart look consistent (1st to 28/30/31st)
+            if start_date and end_date:
+                # Target dates for the whole month
+                full_range = pd.date_range(start=start_date, end=end_date, freq='D')
+                full_df = pd.DataFrame({'날짜': full_range})
+                
+                # Normalize data to datetime for robust merging
+                daily_to_merge = filtered_daily.copy()
+                daily_to_merge['날짜'] = pd.to_datetime(daily_to_merge['날짜'])
+                
+                # Left join ensures every day of the month exists
+                merged_df = pd.merge(full_df, daily_to_merge, on='날짜', how='left').fillna(0)
+                
+                # Cumulative logic: Carry forward previous value on empty days
+                merged_df['누적실적'] = merged_df['누적실적'].replace(0, np.nan).ffill().fillna(0)
+                
+                # [NEW] Filter cumulative data to cut off at the last actual sale date
+                # Finds the last date where '일실적' > 0
+                actual_sales = merged_df[merged_df['일실적'] > 0]
+                if not actual_sales.empty:
+                    last_sale_date = actual_sales['날짜'].max()
+                    # We keep one extra day if available to make the line look complete up to the last point
+                    cumulative_df = merged_df[merged_df['날짜'] <= last_sale_date].copy()
+                else:
+                    cumulative_df = merged_df.copy()
+
+                # Domain for X-axis (Explicitly forced to full month)
+                x_domain = [start_date.isoformat(), end_date.isoformat()]
+            else:
+                merged_df = filtered_daily
+                cumulative_df = filtered_daily
+                x_domain = None
+
             # 그래프 영역 (비율 조정: 7:3)
             main_col, side_col = st.columns([7, 3])
             
             with main_col:
                 import altair as alt
-                # 한국어 요일 표현을 위한 Vega-Lite 표현식 수정
-                axis_label_expr = "utcFormat(datum.value, '%m/%d') + ' ' + (['(일)', '(월)', '(화)', '(수)', '(목)', '(금)', '(토)'][day(datum.value)])"
+                # timeFormat uses local time, matching the browser's day() function
+                axis_label_expr = "timeFormat(datum.value, '%m/%d') + ' ' + (['(일)', '(월)', '(화)', '(수)', '(목)', '(금)', '(토)'][day(datum.value)])"
 
-                cumulative_chart = alt.Chart(filtered_daily).mark_area(
-                    line={'color': '#6366F1'},
+                # Shared X axis configuration
+                x_axis_config = alt.X('yearmonthdate(날짜):T', 
+                    title=None, 
+                    scale=alt.Scale(domain=x_domain, paddingInner=0.2) if x_domain else alt.Undefined,
+                    axis=alt.Axis(
+                        labelExpr=axis_label_expr, 
+                        grid=False,
+                        tickCount={'interval': 'day', 'step': 4}, # Adjust tick density for readability
+                        labelOverlap=True,
+                        labelAngle=-45
+                    )
+                )
+
+                # [1] 누적 추이 차트 레이어 구성
+                cumulative_base = alt.Chart(cumulative_df).transform_calculate(
+                    label_text="format(round(datum.누적실적 / 10000), ',d') + '만'"
+                ).encode(x=x_axis_config)
+                
+                # 면적/선 그래프
+                cumulative_area = cumulative_base.mark_area(
+                    line={'color': '#6366F1', 'strokeWidth': 2},
                     color=alt.Gradient(
                         gradient='linear',
                         stops=[alt.GradientStop(color='#6366F1', offset=0),
-                               alt.GradientStop(color='rgba(99, 102, 241, 0)', offset=1)],
+                               alt.GradientStop(color='rgba(99, 102, 241, 0.05)', offset=1)],
                         x1=1, x2=1, y1=1, y2=0
-                    )
+                    ),
+                    interpolate='monotone'
                 ).encode(
-                    x=alt.X('날짜:T', title=None, axis=alt.Axis(labelExpr=axis_label_expr, grid=False)),
-                    y=alt.Y('누적실적:Q', title="누적 보험료", axis=alt.Axis(grid=True, gridDash=[2,2])),
-                    tooltip=[alt.Tooltip('날짜:T', title="날짜", format='%m/%d'), alt.Tooltip('누적실적:Q', format=',.0f', title="누적")]
-                ).properties(height=280 if chart_view == "모두 보기" else 350)
+                    y=alt.Y('누적실적:Q', title="누적 보험료", axis=alt.Axis(grid=True, gridDash=[2,2], format=',.0f')),
+                    tooltip=[
+                        alt.Tooltip('날짜:T', title="날짜", format='%Y-%m-%d'), 
+                        alt.Tooltip('누적실적:Q', format=',.0f', title="누적실적")
+                    ]
+                )
 
-                daily_chart = alt.Chart(filtered_daily).mark_bar(
+                # 마지막 지점 강조 (포인트 + 라벨)
+                last_point_df = cumulative_df.tail(1)
+                # Terminal base to ensure X-axis alignment
+                terminal_base = alt.Chart(last_point_df).transform_calculate(
+                    label_text="format(round(datum.누적실적 / 10000), ',d') + '만'"
+                ).encode(
+                    x=x_axis_config,
+                    y=alt.Y('누적실적:Q')
+                )
+
+                cumulative_last_mark = terminal_base.mark_point(
+                    size=60, color='#6366F1', fill='white', strokeWidth=2
+                )
+                
+                cumulative_label = terminal_base.mark_text(
+                    align='left', dx=8, fontSize=11, fontWeight='bold', color='#4F46E5', baseline='middle'
+                ).encode(
+                    text=alt.Text('label_text:N')
+                )
+
+                cumulative_final = alt.layer(cumulative_area, cumulative_last_mark, cumulative_label).properties(
+                    height=280 if chart_view == "모두 보기" else 350
+                )
+
+                # [2] 일별 실적 차트 레이어 구성
+                daily_base = alt.Chart(merged_df).transform_calculate(
+                    label_text="format(round(datum.일실적 / 10000), ',d') + '만'"
+                ).encode(x=x_axis_config)
+                
+                # 막대 그래프
+                daily_bar = daily_base.mark_bar(
                     color='#6366F1',
-                    cornerRadiusTopLeft=4,
-                    cornerRadiusTopRight=4
+                    cornerRadiusTopLeft=2,
+                    cornerRadiusTopRight=2,
+                    size=10
                 ).encode(
-                    x=alt.X('날짜:T', title=None, axis=alt.Axis(labelExpr=axis_label_expr, grid=False)),
-                    y=alt.Y('일실적:Q', title="일일 보험료", axis=alt.Axis(grid=True, gridDash=[2,2])),
-                    tooltip=[alt.Tooltip('날짜:T', title="날짜", format='%m/%d'), alt.Tooltip('일실적:Q', format=',.0f', title="일실적")]
-                ).properties(height=280 if chart_view == "모두 보기" else 350)
+                    y=alt.Y('일실적:Q', title="일일 보험료", axis=alt.Axis(grid=True, gridDash=[2,2], format=',.0f')),
+                    tooltip=[
+                        alt.Tooltip('날짜:T', title="날짜", format='%Y-%m-%d'), 
+                        alt.Tooltip('일실적:Q', format=',.0f', title="일일실적")
+                    ]
+                )
 
+                # 데이터 라벨 (막대 상단 - '만' 단위)
+                daily_label = daily_base.mark_text(
+                    align='center', baseline='bottom', dy=-2, dx=12, fontSize=9, color='#4F46E5', fontWeight='bold'
+                ).encode(
+                    y=alt.Y('일실적:Q'),
+                    text=alt.Text('label_text:N')
+                ).transform_filter(alt.datum.일실적 >= 5000) # 0.5만 이상인 경우만 표시
+
+                daily_final = alt.layer(daily_bar, daily_label).properties(
+                    height=280 if chart_view == "모두 보기" else 350
+                )
+
+                # 차트 출력
                 if chart_view == "누적 추이":
-                    st.altair_chart(cumulative_chart, use_container_width=True)
+                    st.altair_chart(cumulative_final, use_container_width=True)
                 elif chart_view == "일별 실적":
-                    st.altair_chart(daily_chart, use_container_width=True)
+                    st.altair_chart(daily_final, use_container_width=True)
                 else:
-                    st.altair_chart(cumulative_chart, use_container_width=True)
-                    st.altair_chart(daily_chart, use_container_width=True)
+                    st.altair_chart(cumulative_final, use_container_width=True)
+                    st.altair_chart(daily_final, use_container_width=True)
 
             with side_col:
-                if start_date and end_date:
-                    full_date_range = pd.date_range(start=start_date, end=end_date)
-                    full_daily_df = pd.DataFrame({'날짜': full_date_range})
-                    full_daily_df['날짜'] = pd.to_datetime(full_daily_df['날짜']).dt.date
-                    filtered_daily['날짜'] = pd.to_datetime(filtered_daily['날짜']).dt.date
-                    merged_df = pd.merge(full_daily_df, filtered_daily, on='날짜', how='left').fillna(0)
-                    merged_df['누적실적'] = merged_df['누적실적'].replace(0, pd.NA).ffill().fillna(0)
-                else:
-                    merged_df = filtered_daily
                 
                 weekday_map = {0: '월', 1: '화', 2: '수', 3: '목', 4: '금', 5: '토', 6: '일'}
                 table_df = merged_df.copy()
