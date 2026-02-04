@@ -219,8 +219,10 @@ def render_agent_list_ui(agg_df: pd.DataFrame):
             st.markdown(f"<span style='color:#059669; font-weight:600;'>{others_val:,.0f}</span>", unsafe_allow_html=True)
             
         with c8:
-            # Unified secondary style for all agents
-            if st.button("조회", key=f"view_btn_{idx}_{row['설계사']}", type="secondary"):
+            # Styled as a small "Detail" button
+            # Added a tiny margin-top to separate from header/line
+            st.markdown("<div style='margin-top: 4px;'></div>", unsafe_allow_html=True)
+            if st.button("상세", key=f"view_btn_{idx}_{row['설계사']}", use_container_width=True):
                 st.session_state.selected_agent = row['설계사']
                 st.rerun()
         
@@ -334,16 +336,45 @@ def render_sticky_header(title, is_detail=False, back_callback=None, nav_items=N
             background: rgba(255,255,255,0.5);
         }
         
-        /* Adjust for back button */
+        /* Specific Fix: Streamlit's element container adds hidden padding/margins */
+        .element-container:has(.stButton), .stElementContainer:has(.stButton) {
+            margin: 0 !important;
+            padding: 0 !important;
+        }
+
+        /* Adjust for back button and custom detail buttons */
+        .stButton {
+            margin-top: 0 !important;
+            margin-bottom: 0 !important;
+            display: flex;
+            justify-content: center;
+        }
         .stButton button {
-            border: none;
-            background: transparent;
-            padding: 0;
-            color: #64748b;
+            border: 1px solid #E2E8F0 !important;
+            background: white !important;
+            padding: 2px 10px !important;
+            margin-top: 16px !important; /* Visual fix to prevent sticking to header */
+            color: #64748b !important;
+            font-size: 0.8rem !important;
+            font-weight: 600 !important;
+            border-radius: 4px !important;
+            transition: all 0.2s !important;
+            height: auto !important;
+            min-height: unset !important;
+            line-height: 1.4 !important;
+            width: auto !important;
         }
         .stButton button:hover {
-            color: #4f46e5;
-            background: transparent;
+            color: #4f46e5 !important;
+            border-color: #4f46e5 !important;
+            background: #f5f3ff !important;
+        }
+        /* Specific override for back arrow if needed */
+        div:has(> button[key*="back_btn"]) button {
+            border: none !important;
+            background: transparent !important;
+            font-size: 1.2rem !important;
+            margin-top: 0 !important; /* Keep back button aligned */
         }
     </style>
     """, unsafe_allow_html=True)
