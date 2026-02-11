@@ -59,7 +59,7 @@ from analysis import (
 
 # --- 캐싱 전용 함수 ---
 @st.cache_data(show_spinner="전체 시상금 계산 중... (수 분이 소요될 수 있습니다)")
-def get_batch_calculation(contracts_df, rules_df, period_start, period_end, company_filter, _v=13):
+def get_batch_calculation(contracts_df, rules_df, period_start, period_end, company_filter, _v=15):
     """모든 설계사의 시상 내역을 한 번에 계산하여 캐싱 (_v: 캐시 갱신용 버전)"""
     # [CRITICAL] 실적 분류(분류 컬럼)를 위해 전처리 필수 수행
     processed_all, _ = preprocess_contracts(contracts_df, agent_name=None)
@@ -487,7 +487,7 @@ st.markdown("""
     
     .award-table-header {
         display: grid;
-        grid-template-columns: 40px 2fr 0.8fr 0.8fr 1.2fr 1fr 1.5fr 1fr;
+        grid-template-columns: 40px 1.8fr 0.6fr 0.6fr 1.1fr 1fr 1.4fr 0.9fr;
         padding: 0.85rem 1rem;
         background-color: #F9FAFB;
         border-bottom: 2px solid #E5E7EB;
@@ -508,12 +508,13 @@ st.markdown("""
     
     .award-summary {
         display: grid;
-        grid-template-columns: 40px 2fr 0.8fr 0.8fr 1.2fr 1fr 1.5fr 1fr;
+        grid-template-columns: 40px 1.8fr 0.6fr 0.6fr 1.1fr 1fr 1.4fr 0.9fr;
         align-items: center;
         padding: 0.9rem 1rem;
         cursor: pointer;
         list-style: none;
         transition: background 0.2s;
+        min-height: 80px; /* 고정 높이 기준점 */
     }
     
     .award-summary:hover {
@@ -522,6 +523,14 @@ st.markdown("""
     
     .award-summary::-webkit-details-marker {
         display: none;
+    }
+
+    /* 텍스트 줄바꿈 방지 및 말줄임표 */
+    .award-summary > div {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        padding-right: 4px;
     }
     
     .award-detail-panel {
@@ -549,6 +558,39 @@ st.markdown("""
     .payout-text { text-align: right; font-weight: 700; font-size: 0.95rem; }
     .target-text { text-align: right; color: #374151; font-weight: 500; }
     .perf-text { text-align: right; color: #111827; font-weight: 600; }
+
+    /* --- [NEW] 보험사별 스플릿 뷰 전용 압축 스타일 --- */
+    .award-split-view .award-summary {
+        grid-template-columns: 35px 1.8fr 80px 80px 1.4fr 1fr;
+        padding: 0.5rem 0.6rem;
+        min-height: 58px;
+        height: 58px; /* 행 높이 더 축소하여 더 많이 보이게 함 */
+    }
+    .award-split-view .award-table-header {
+        grid-template-columns: 35px 1.8fr 80px 80px 1.4fr 1fr;
+        padding: 0.4rem 0.6rem;
+        font-size: 0.65rem;
+    }
+    .award-split-view .award-summary * {
+        font-size: 0.7rem !important;
+    }
+    .award-split-view .payout-text {
+        font-size: 0.72rem !important;
+        line-height: 1.1;
+    }
+    .award-split-view .progress-container {
+        height: 3px;
+    }
+    .award-split-view .award-summary span {
+        padding: 1px 3px !important;
+    }
+    .award-split-view .company-name {
+        display: none;
+    }
+    /* 스플릿 뷰에서는 카드 내부 타겟 텍스트 크기도 줄임 */
+    .award-split-view .target-text, .award-split-view .perf-text {
+        font-size: 0.72rem !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -986,7 +1028,7 @@ def clean_html(html_str):
     cleaned = re.sub(r'\s+', ' ', no_newlines)
     return cleaned.strip()
 
-def get_award_card_html(group, period_str, status_color, status_icon, type_style, payout_display, is_imminent=False, is_past_missed=False):
+def get_award_card_html(group, period_str, status_color, status_icon, type_style, payout_display, is_imminent=False, is_past_missed=False, show_type_cat=True):
     """시상 내역 카드 HTML 생성"""
     imminent_badge = ""
     if is_imminent:
@@ -1020,6 +1062,24 @@ def get_award_card_html(group, period_str, status_color, status_icon, type_style
         target_val = group['target']
         target_display = f"{target_val:,.0f}" if pd.notna(target_val) and target_val > 0 else "-"
     
+    type_cat_html = ""
+    if show_type_cat:
+        type_cat_html = f"""
+        <!-- Type -->
+        <div>
+            <span style="background: {type_style['bg']}; color: {type_style['color']}; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 600;">
+                {group['type']}
+            </span>
+        </div>
+        
+        <!-- Category (Target) -->
+        <div>
+            <span style="background: #F8FAFC; color: #475569; border: 1px solid #E2E8F0; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 500;">
+                {group.get('product_category', '-')}
+            </span>
+        </div>
+        """
+    
     html = f"""
     <!-- Status Icon -->
     <div style="display: flex; justify-content: center;">
@@ -1027,24 +1087,12 @@ def get_award_card_html(group, period_str, status_color, status_icon, type_style
     </div>
     
     <!-- Award Name & Company -->
-    <div style="padding-right: 1rem;">
-        <div style="font-weight: 700; font-size: 0.9rem; color: #111827; margin-bottom: 2px;">{group['name']} {imminent_badge}</div>
-        <div style="font-size: 0.75rem; color: #9CA3AF;">{group['company']}</div>
+    <div style="padding-right: 0.5rem; min-width: 0;">
+        <div style="font-weight: 700; font-size: 0.9rem; color: #111827; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{group['name']}">{group['name']} {imminent_badge}</div>
+        <div class="company-name" style="font-size: 0.75rem; color: #9CA3AF; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{group['company']}</div>
     </div>
     
-    <!-- Type -->
-    <div>
-        <span style="background: {type_style['bg']}; color: {type_style['color']}; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 600;">
-            {group['type']}
-        </span>
-    </div>
-    
-    <!-- Category (Target) -->
-    <div>
-        <span style="background: #F8FAFC; color: #475569; border: 1px solid #E2E8F0; padding: 2px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: 500;">
-            {group.get('product_category', '-')}
-        </span>
-    </div>
+    {type_cat_html}
     
     <!-- Period -->
     <div style="font-size: 0.8rem; color: #6B7280; font-family: monospace;">
@@ -1436,7 +1484,7 @@ def render_results_table(results_df: pd.DataFrame):
         return
 
     # --- 상단 컨트롤 패널 (심플 모드) ---
-    c1, c2, b3, c3, c4, c5 = st.columns([1, 0.8, 0.8, 0.8, 0.7, 0.4])
+    c1, c2, b3, c3, c4, c5, c6 = st.columns([1, 0.8, 0.8, 0.8, 0.7, 0.4, 0.8])
     with c1:
         search_query = st.text_input("🔍 검색", placeholder="시상명 입력...", label_visibility="collapsed")
     with c2:
@@ -1451,6 +1499,8 @@ def render_results_table(results_df: pd.DataFrame):
         sort_by = st.selectbox("🔃 정렬", ["달성률순", "지급금액순", "시작일순"], label_visibility="collapsed")
     with c5:
         expand_all = st.checkbox("펼치기", value=False)
+    with c6:
+        view_mode = st.radio("보기", ["📋 통합", "↔️ 보험사별"], horizontal=True, label_visibility="collapsed")
 
     # 시상명 및 회사별로 그룹화
     award_groups = []
@@ -1557,6 +1607,11 @@ def render_results_table(results_df: pd.DataFrame):
         # 상품구분 추출 (사용자 요청: C열 '상품구분'만 엄격하게 사용, 유추 로직 제거)
         raw_cat = group_df['상품구분'].dropna().iloc[0] if '상품구분' in group_df.columns and not group_df['상품구분'].dropna().empty else '-'
 
+        # Group_ID 추출 (보험사별 정렬용)
+        group_id_val = ''
+        if 'Group_ID' in group_df.columns and not group_df['Group_ID'].dropna().empty:
+            group_id_val = group_df['Group_ID'].dropna().iloc[0]
+
         award_groups.append({
             'name': award_name,
             'company': company,
@@ -1575,7 +1630,8 @@ def render_results_table(results_df: pd.DataFrame):
             'scenarios': group_df['scenarios'].dropna().iloc[0] if 'scenarios' in group_df.columns and not group_df['scenarios'].dropna().empty else [],
             'product_category': raw_cat if raw_cat else '-',
             'original_index': group_df.index.min(), # 원본 데이터 순서 추적용
-            'expected_payout': group_df['예상지급금액'].max() if '예상지급금액' in group_df.columns else 0
+            'expected_payout': group_df['예상지급금액'].max() if '예상지급금액' in group_df.columns else 0,
+            'group_id': group_id_val
         })
     
     # --- 정렬 적용 ---
@@ -1587,14 +1643,9 @@ def render_results_table(results_df: pd.DataFrame):
         # NaT values handles safely by sort
         award_groups.sort(key=lambda x: x['start_date'] if pd.notna(x['start_date']) else pd.Timestamp.min)
     
-    # 테이블 본체 HTML 생성
-    
-    # 테이블 본체 HTML 생성
-    table_rows_html = []
-    open_attr = "open" if expand_all else ""
-    
-    for idx, group in enumerate(award_groups):
-        # 상태 결정 및 스타일
+    # --- 카드 렌더링 헬퍼 함수 ---
+    def _build_award_row_html(group, expand_all_flag=False, show_type_cat=True):
+        """개별 시상 그룹을 HTML row로 변환"""
         is_imminent = False
         is_past_missed = False
         
@@ -1602,36 +1653,30 @@ def render_results_table(results_df: pd.DataFrame):
         e_date = pd.to_datetime(group.get('end_date', pd.NaT))
         
         if group['is_over_achieved']:
-            status_color, status_icon = "#8B5CF6", "🎯" # Indigo
+            status_color, status_icon = "#8B5CF6", "🎯"
         elif group['is_achieved']:
-            status_color, status_icon = "#10B981", "✅" # Emerald
+            status_color, status_icon = "#10B981", "✅"
         elif group['achievement'] >= 80 and group['achievement'] < 100:
-             # 임박 혹은 아까운 미달성
              if pd.notna(e_date) and e_date < current_date:
                  status_color, status_icon = "#EF4444", "❌"
                  is_past_missed = True
              else:
-                 status_color, status_icon = "#F59E0B", "⏳" # Orange
+                 status_color, status_icon = "#F59E0B", "⏳"
                  is_imminent = True
         else:
-            # 진행중 or 실패 판별
             s_date = pd.to_datetime(group.get('start_date', pd.NaT))
-            
             is_expired = False
             if pd.notna(e_date) and current_date > e_date + pd.Timedelta(days=1): 
                  is_expired = True
-
             if is_expired:
-                status_color, status_icon = "#EF4444", "❌" # Red (실패)
+                status_color, status_icon = "#EF4444", "❌"
             else:
-                # 진행중 아이콘
                 status_color, status_icon = "#F59E0B", """
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="vertical-align: middle;">
                     <circle cx="12" cy="12" r="9" stroke="#F59E0B" stroke-width="2.5" />
                 </svg>
                 """
 
-        # 유형 스타일
         type_styles = {
             '연속형': {'bg': '#EEF2FF', 'color': '#4F46E5'}, 
             '정률형': {'bg': '#FEF3C7', 'color': '#B45309'}, 
@@ -1652,40 +1697,117 @@ def render_results_table(results_df: pd.DataFrame):
         if group['payout'] > 0:
             payout_display = f"<span style='color: #10B981; font-weight: 700;'>{group['payout']:,.0f}원</span>"
         elif exp_pay > 0:
-            # 지급 시기 미도래 (예상 금액 표시)
             payout_display = f"<span style='color: #F59E0B; font-weight: 600;'>0원</span><br><span style='font-size: 0.65rem; color: #F59E0B; font-weight: 500;'>(예상 {exp_pay:,.0f}원)</span>"
         else:
             payout_display = f"<span style='color: #6B7280; font-weight: 400;'>0원</span>"
             
-        # Max amount always visible (small)
         if group['max_payout'] > 0:
             payout_display += f"<div style='font-size: 0.65rem; color: #94A3B8; font-weight: 400; margin-top: 2px;'>(최고 {group['max_payout']:,.0f}원)</div>"
         
-        # Row HTML generation
-        row_content = get_award_card_html(group, period_str, status_color, status_icon, type_style, payout_display, is_imminent, is_past_missed)
+        row_content = get_award_card_html(group, period_str, status_color, status_icon, type_style, payout_display, is_imminent, is_past_missed, show_type_cat=show_type_cat)
         detail_content = get_award_detail_html(group, group.get('period_stats'), group['rows'])
         
-        # 고유 ID 생성 (스크롤용)
         safe_id = f"award-{group['company']}-{group['name']}".replace(" ", "-").replace("_", "-")
-        
-        # Auto-Expand Logic
         is_targeted = st.session_state.get('expanded_award') == group['name']
-        current_open_attr = "open" if (expand_all or is_targeted) else ""
+        current_open_attr = "open" if (expand_all_flag or is_targeted) else ""
         
-        item_html = f'<div class="award-item-row" id="{safe_id}"><details {current_open_attr}><summary class="award-summary">{row_content}</summary><div class="award-detail-panel">{detail_content}</div></details></div>'
-        table_rows_html.append(item_html)
-        
-    full_table_html = f'<div class="award-table"><div class="award-table-header"><div style="text-align: center;">상태</div><div>시상명</div><div>유형</div><div>대상</div><div>기간</div><div style="text-align: right;">목표실적</div><div style="text-align: center;">실적 / 달성률</div><div style="text-align: right;">지급금액</div></div>{"".join(table_rows_html)}</div>'
-    
-    st.write(full_table_html, unsafe_allow_html=True)
+        return f'<div class="award-item-row" id="{safe_id}"><details {current_open_attr}><summary class="award-summary">{row_content}</summary><div class="award-detail-panel">{detail_content}</div></details></div>'
 
-    
-    # 푸터
-    st.markdown(textwrap.dedent(f"""
-        <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 0; font-size: 0.75rem; color: #6B7280;">
-            <span>{len(award_groups)}개 시상 ({len(results_df)}행)</span>
-        </div>
-    """), unsafe_allow_html=True)
+    def _render_award_table(groups_list, expand_all_flag=False, show_header=True, extra_class="", show_type_cat=True):
+        """시상 그룹 리스트를 테이블로 렌더링 (통합/보험사별 공통)"""
+        table_rows_html = []
+        for group in groups_list:
+            table_rows_html.append(_build_award_row_html(group, expand_all_flag, show_type_cat=show_type_cat))
+        
+        if "award-split-view" in extra_class:
+            header_columns = '<div style="text-align: center;">상태</div><div>시상명</div><div>기간</div><div style="text-align: right;">목표</div><div style="text-align: center;">실적/달성률</div><div style="text-align: right;">지급액</div>'
+        else:
+            header_columns = '<div style="text-align: center;">상태</div><div>시상명</div><div>유형</div><div>대상</div><div>기간</div><div style="text-align: right;">목표실적</div><div style="text-align: center;">실적 / 달성률</div><div style="text-align: right;">지급금액</div>'
+            
+        header_html = f'<div class="award-table-header">{header_columns}</div>' if show_header else ''
+        return f'<div class="award-table {extra_class}">{header_html}{"".join(table_rows_html)}</div>'
+
+    # --- 보기 모드에 따라 렌더링 ---
+    if view_mode == "📋 통합":
+        # 기존 통합 보기
+        full_table_html = _render_award_table(award_groups, expand_all)
+        st.write(full_table_html, unsafe_allow_html=True)
+        
+        # 푸터
+        st.markdown(textwrap.dedent(f"""
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 0; font-size: 0.75rem; color: #6B7280;">
+                <span>{len(award_groups)}개 시상 ({len(results_df)}행)</span>
+            </div>
+        """), unsafe_allow_html=True)
+    else:
+        # 보험사별 스플릿 뷰
+        # 삼성 / KB로 분리 (Group_ID 오름차순 정렬)
+        samsung_groups = [g for g in award_groups if '삼성' in str(g['company'])]
+        kb_groups = [g for g in award_groups if 'KB' in str(g['company']).upper()]
+        other_groups = [g for g in award_groups if '삼성' not in str(g['company']) and 'KB' not in str(g['company']).upper()]
+        
+        # Group_ID 오름차순 정렬
+        def sort_key_group_id(g):
+            gid = g.get('group_id', '')
+            if gid == '' or pd.isna(gid):
+                return (1, '')  # Group_ID 없는 것은 뒤로
+            return (0, str(gid))
+        
+        samsung_groups.sort(key=sort_key_group_id)
+        kb_groups.sort(key=sort_key_group_id)
+        
+        col_left, col_right = st.columns(2)
+        
+        with col_left:
+            sam_total = sum(g['payout'] for g in samsung_groups)
+            st.markdown(f"""
+                <div style="background: linear-gradient(135deg, #1E40AF 0%, #3B82F6 100%); color: white; padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
+                    <div style="font-weight: 700; font-size: 1rem;">🔵 삼성화재</div>
+                    <div style="display: flex; gap: 1rem; align-items: center;">
+                        <span style="font-size: 0.8rem; opacity: 0.9;">{len(samsung_groups)}개 시상</span>
+                        <span style="font-weight: 700; font-size: 1rem;">💰 {sam_total:,.0f}원</span>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+            if samsung_groups:
+                samsung_html = _render_award_table(samsung_groups, expand_all, extra_class="award-split-view", show_type_cat=False)
+                st.write(samsung_html, unsafe_allow_html=True)
+            else:
+                st.info("삼성화재 시상 내역이 없습니다.")
+        
+        with col_right:
+            kb_total = sum(g['payout'] for g in kb_groups)
+            st.markdown(f"""
+                <div style="background: linear-gradient(135deg, #B45309 0%, #F59E0B 100%); color: white; padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
+                    <div style="font-weight: 700; font-size: 1rem;">🟡 KB손해보험</div>
+                    <div style="display: flex; gap: 1rem; align-items: center;">
+                        <span style="font-size: 0.8rem; opacity: 0.9;">{len(kb_groups)}개 시상</span>
+                        <span style="font-weight: 700; font-size: 1rem;">💰 {kb_total:,.0f}원</span>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+            if kb_groups:
+                kb_html = _render_award_table(kb_groups, expand_all, extra_class="award-split-view", show_type_cat=False)
+                st.write(kb_html, unsafe_allow_html=True)
+            else:
+                st.info("KB손해보험 시상 내역이 없습니다.")
+        
+        # 기타 보험사가 있는 경우 하단에 표시
+        if other_groups:
+            st.markdown(f"""
+                <div style="background: #F1F5F9; color: #475569; padding: 0.75rem 1rem; border-radius: 8px; margin: 0.5rem 0; font-weight: 700;">
+                    기타 보험사 ({len(other_groups)}개 시상)
+                </div>
+            """, unsafe_allow_html=True)
+            other_html = _render_award_table(other_groups, expand_all)
+            st.write(other_html, unsafe_allow_html=True)
+        
+        # 스플릿 뷰 푸터
+        st.markdown(textwrap.dedent(f"""
+            <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 0; font-size: 0.75rem; color: #6B7280;">
+                <span>삼성 {len(samsung_groups)}개 + KB {len(kb_groups)}개 + 기타 {len(other_groups)}개 = 총 {len(award_groups)}개 시상</span>
+            </div>
+        """), unsafe_allow_html=True)
 
 
 
@@ -2251,7 +2373,13 @@ def main():
             try:
                 if calc_params['agent_name']:
                     # [Scroll to Top]
-                    st.components.v1.html("<script>window.parent.window.scrollTo(0,0);</script>", height=0)
+                    st.components.v1.html("""<script>
+                        // Streamlit 스크롤 컨테이너 최상단으로 이동
+                        const main = window.parent.document.querySelector('section.main');
+                        if (main) main.scrollTo({top: 0, behavior: 'smooth'});
+                        window.parent.document.querySelectorAll('[data-testid="stAppViewBlockContainer"]').forEach(el => el.scrollTo({top: 0, behavior: 'smooth'}));
+                        window.parent.window.scrollTo({top: 0, behavior: 'smooth'});
+                    </script>""", height=0)
                     
                     # --- 설계사별 상세 대시보드 ---
                     
@@ -2354,7 +2482,13 @@ def main():
                         render_results_table(results)
                 elif st.session_state.get('selected_team'):
                     # [Scroll to Top]
-                    st.components.v1.html("<script>window.parent.window.scrollTo(0,0);</script>", height=0)
+                    st.components.v1.html("""<script>
+                        // Streamlit 스크롤 컨테이너 최상단으로 이동
+                        const main = window.parent.document.querySelector('section.main');
+                        if (main) main.scrollTo({top: 0, behavior: 'smooth'});
+                        window.parent.document.querySelectorAll('[data-testid="stAppViewBlockContainer"]').forEach(el => el.scrollTo({top: 0, behavior: 'smooth'}));
+                        window.parent.window.scrollTo({top: 0, behavior: 'smooth'});
+                    </script>""", height=0)
                     
                     # --- 팀별 상세 대시보드 ---
                     team_name = st.session_state.selected_team
@@ -2513,7 +2647,13 @@ def main():
                 else:
                     # [Scroll to Top] (Only if we were in detailed view before)
                     if st.session_state.get('last_view') != 'main':
-                        st.components.v1.html("<script>window.parent.window.scrollTo(0,0);</script>", height=0)
+                        st.components.v1.html("""<script>
+                        // Streamlit 스크롤 컨테이너 최상단으로 이동
+                        const main = window.parent.document.querySelector('section.main');
+                        if (main) main.scrollTo({top: 0, behavior: 'smooth'});
+                        window.parent.document.querySelectorAll('[data-testid="stAppViewBlockContainer"]').forEach(el => el.scrollTo({top: 0, behavior: 'smooth'}));
+                        window.parent.window.scrollTo({top: 0, behavior: 'smooth'});
+                    </script>""", height=0)
                         st.session_state.last_view = 'main'
                             
                     # 전체 보기 (메인 대시보드)

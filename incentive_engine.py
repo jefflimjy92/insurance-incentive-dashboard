@@ -629,6 +629,8 @@ def calculate_all_awards(contracts: pd.DataFrame, rules: pd.DataFrame,
                     res['회사'] = company
                     res['시상명'] = award_name
                     res['유형'] = award_type
+                    # Group_ID 보존 (보험사별 정렬용)
+                    res['Group_ID'] = group['Group_ID'].iloc[0] if 'Group_ID' in group.columns else ''
                     # 정렬을 위한 기본값
                     res['정렬_목표실적'] = 0 
                     
@@ -656,7 +658,8 @@ def calculate_all_awards(contracts: pd.DataFrame, rules: pd.DataFrame,
                     
                     if res:
                         res['설계사'] = agent_name or '전체'
-                        # print(f"DEBUG: res for normal rule ({_}): {res.get('지급금액', 'No Amount')}")
+                        # Group_ID 보존 (보험사별 정렬용)
+                        res['Group_ID'] = rule.get('Group_ID', '')
                         # 개별 행의 목표실적 보존 (정렬용 + 표시용)
                         res['목표실적'] = get_safe_val(rule, ['목표실적', 'target'], 0)
                         res['정렬_목표실적'] = res['목표실적']
