@@ -597,11 +597,16 @@ def filter_by_products(contracts: pd.DataFrame, 포함상품: Optional[str], 상
     """
     # 포함상품이 있으면 키워드 포함(contains)으로 필터링
     if not pd.isna(포함상품) and str(포함상품).strip() != '':
-        keywords = [k.strip() for k in str(포함상품).split('|') if k.strip()]
+        # 쉼표로 구분된 키워드 파싱 (공백 제거)
+        keywords = [k.strip() for k in str(포함상품).split(',') if k.strip()]
         if keywords:
-            # 여러 키워드 중 하나라도 포함된 경우를 찾기 위해 regex pattern 생성
-            pattern = '|'.join(keywords)
-            return contracts[contracts['상품명'].str.contains(pattern, na=False)]
+            # 각 키워드에 대해 정규식 특수문자 이스케이프 처리
+            import re
+            escaped_keywords = [re.escape(k) for k in keywords]
+            pattern = '|'.join(escaped_keywords)
+            # 대소문자 구분 없이 매칭 (case=False)
+            # 상품명에 키워드 중 하나라도 포함되면 True
+            return contracts[contracts['상품명'].str.contains(pattern, na=False, case=False, regex=True)]
     
     # 포함상품이 비어있고 상품구분이 있으면 해당 분류로 필터링
     if not pd.isna(상품구분) and str(상품구분).strip() != '':

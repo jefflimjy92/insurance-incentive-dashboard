@@ -59,7 +59,7 @@ from analysis import (
 
 # --- 캐싱 전용 함수 ---
 @st.cache_data(show_spinner="전체 시상금 계산 중... (수 분이 소요될 수 있습니다)")
-def get_batch_calculation(contracts_df, rules_df, period_start, period_end, company_filter, _v=11):
+def get_batch_calculation(contracts_df, rules_df, period_start, period_end, company_filter, _v=13):
     """모든 설계사의 시상 내역을 한 번에 계산하여 캐싱 (_v: 캐시 갱신용 버전)"""
     # [CRITICAL] 실적 분류(분류 컬럼)를 위해 전처리 필수 수행
     processed_all, _ = preprocess_contracts(contracts_df, agent_name=None)
