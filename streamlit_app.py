@@ -1782,77 +1782,60 @@ def render_results_table(results_df: pd.DataFrame):
             </div>
         """), unsafe_allow_html=True)
     else:
-        # 보험사별 스플릿 뷰 (3분할: 삼성, KB, DB)
-        samsung_groups = [g for g in award_groups if '삼성' in str(g['company'])]
-        kb_groups = [g for g in award_groups if 'KB' in str(g['company']).upper()]
-        db_groups = [g for g in award_groups if 'DB' in str(g['company']).upper()]
+        # 보험사 선택 위젯 (동적 다단 레이아웃)
+        st.markdown("<div style='margin-bottom: 0.5rem;'></div>", unsafe_allow_html=True)
+        split_companies = st.multiselect(
+            "비교할 보험사 선택 (원하는 조합으로 1단/2단/3단 화면을 구성하세요)",
+            options=["삼성화재", "KB손해보험", "DB손해보험"],
+            default=["삼성화재", "KB손해보험", "DB손해보험"]
+        )
+        
+        company_counts = {}
+        if not split_companies:
+            st.warning("분할해서 볼 보험사를 하나 이상 선택해주세요.")
+            other_groups = [g for g in award_groups if '삼성' not in str(g['company']) and 'KB' not in str(g['company']).upper() and 'DB' not in str(g['company']).upper()]
+        else:
+            # Group_ID 오름차순 정렬
+            def sort_key_group_id(g):
+                gid = g.get('group_id', '')
+                if gid == '' or pd.isna(gid):
+                    return (1, '')  # Group_ID 없는 것은 뒤로
+                return (0, str(gid))
+
+            cols = st.columns(len(split_companies))
+            
+            company_configs = {
+                "삼성화재": {"keyword": "삼성", "icon": "🔵", "bg": "linear-gradient(135deg, #1E40AF 0%, #3B82F6 100%)"},
+                "KB손해보험": {"keyword": "KB", "icon": "🟡", "bg": "linear-gradient(135deg, #B45309 0%, #F59E0B 100%)"},
+                "DB손해보험": {"keyword": "DB", "icon": "🟢", "bg": "linear-gradient(135deg, #047857 0%, #10B981 100%)"}
+            }
+            
+            for idx, comp in enumerate(split_companies):
+                config = company_configs[comp]
+                with cols[idx]:
+                    groups = [g for g in award_groups if config["keyword"] in str(g['company']).upper()]
+                    groups.sort(key=sort_key_group_id)
+                    company_counts[comp] = len(groups)
+                    total_payout = sum(g['payout'] for g in groups)
+                    
+                    st.markdown(f"""
+                        <div style="background: {config['bg']}; color: white; padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
+                            <div style="font-weight: 700; font-size: 1rem;">{config['icon']} {comp}</div>
+                            <div style="display: flex; gap: 1rem; align-items: center;">
+                                <span style="font-size: 0.8rem; opacity: 0.9;">{len(groups)}개 시상</span>
+                                <span style="font-weight: 700; font-size: 1rem;">💰 {total_payout:,.0f}원</span>
+                            </div>
+                        </div>
+                    """, unsafe_allow_html=True)
+                    
+                    if groups:
+                        comp_html = _render_award_table(groups, expand_all, extra_class="award-split-view", show_type_cat=False)
+                        st.write(comp_html, unsafe_allow_html=True)
+                    else:
+                        st.info(f"{comp} 시상 내역이 없습니다.")
+            
+        # 기타 보험사가 있는 경우 하단에 표시 (삼성, KB, DB를 제외한 나머지)
         other_groups = [g for g in award_groups if '삼성' not in str(g['company']) and 'KB' not in str(g['company']).upper() and 'DB' not in str(g['company']).upper()]
-        
-        # Group_ID 오름차순 정렬
-        def sort_key_group_id(g):
-            gid = g.get('group_id', '')
-            if gid == '' or pd.isna(gid):
-                return (1, '')  # Group_ID 없는 것은 뒤로
-            return (0, str(gid))
-        
-        samsung_groups.sort(key=sort_key_group_id)
-        kb_groups.sort(key=sort_key_group_id)
-        db_groups.sort(key=sort_key_group_id)
-        
-        col_left, col_mid, col_right = st.columns(3)
-        
-        with col_left:
-            sam_total = sum(g['payout'] for g in samsung_groups)
-            st.markdown(f"""
-                <div style="background: linear-gradient(135deg, #1E40AF 0%, #3B82F6 100%); color: white; padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
-                    <div style="font-weight: 700; font-size: 1rem;">🔵 삼성화재</div>
-                    <div style="display: flex; gap: 1rem; align-items: center;">
-                        <span style="font-size: 0.8rem; opacity: 0.9;">{len(samsung_groups)}개 시상</span>
-                        <span style="font-weight: 700; font-size: 1rem;">💰 {sam_total:,.0f}원</span>
-                    </div>
-                </div>
-            """, unsafe_allow_html=True)
-            if samsung_groups:
-                samsung_html = _render_award_table(samsung_groups, expand_all, extra_class="award-split-view", show_type_cat=False)
-                st.write(samsung_html, unsafe_allow_html=True)
-            else:
-                st.info("삼성화재 시상 내역이 없습니다.")
-        
-        with col_mid:
-            kb_total = sum(g['payout'] for g in kb_groups)
-            st.markdown(f"""
-                <div style="background: linear-gradient(135deg, #B45309 0%, #F59E0B 100%); color: white; padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
-                    <div style="font-weight: 700; font-size: 1rem;">🟡 KB손해보험</div>
-                    <div style="display: flex; gap: 1rem; align-items: center;">
-                        <span style="font-size: 0.8rem; opacity: 0.9;">{len(kb_groups)}개 시상</span>
-                        <span style="font-weight: 700; font-size: 1rem;">💰 {kb_total:,.0f}원</span>
-                    </div>
-                </div>
-            """, unsafe_allow_html=True)
-            if kb_groups:
-                kb_html = _render_award_table(kb_groups, expand_all, extra_class="award-split-view", show_type_cat=False)
-                st.write(kb_html, unsafe_allow_html=True)
-            else:
-                st.info("KB손해보험 시상 내역이 없습니다.")
-                
-        with col_right:
-            db_total = sum(g['payout'] for g in db_groups)
-            st.markdown(f"""
-                <div style="background: linear-gradient(135deg, #047857 0%, #10B981 100%); color: white; padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
-                    <div style="font-weight: 700; font-size: 1rem;">🟢 DB손해보험</div>
-                    <div style="display: flex; gap: 1rem; align-items: center;">
-                        <span style="font-size: 0.8rem; opacity: 0.9;">{len(db_groups)}개 시상</span>
-                        <span style="font-weight: 700; font-size: 1rem;">💰 {db_total:,.0f}원</span>
-                    </div>
-                </div>
-            """, unsafe_allow_html=True)
-            if db_groups:
-                db_html = _render_award_table(db_groups, expand_all, extra_class="award-split-view", show_type_cat=False)
-                st.write(db_html, unsafe_allow_html=True)
-            else:
-                st.info("DB손해보험 시상 내역이 없습니다.")
-        
-        # 기타 보험사가 있는 경우 하단에 표시
         if other_groups:
             st.markdown(f"""
                 <div style="background: #F1F5F9; color: #475569; padding: 0.75rem 1rem; border-radius: 8px; margin: 0.5rem 0; font-weight: 700;">
@@ -1863,9 +1846,14 @@ def render_results_table(results_df: pd.DataFrame):
             st.write(other_html, unsafe_allow_html=True)
         
         # 스플릿 뷰 푸터
+        count_strs = []
+        for comp, cnt in company_counts.items():
+            count_strs.append(f"{comp[:2]} {cnt}개")
+        count_strs.append(f"기타 {len(other_groups)}개")
+        
         st.markdown(textwrap.dedent(f"""
             <div style="display: flex; justify-content: space-between; align-items: center; padding: 0.75rem 0; font-size: 0.75rem; color: #6B7280;">
-                <span>삼성 {len(samsung_groups)}개 + KB {len(kb_groups)}개 + 기타 {len(other_groups)}개 = 총 {len(award_groups)}개 시상</span>
+                <span>{' + '.join(count_strs)} = 총 {len(award_groups)}개 시상</span>
             </div>
         """), unsafe_allow_html=True)
 
