@@ -557,39 +557,46 @@ st.markdown("""
     
     .payout-text { text-align: right; font-weight: 700; font-size: 0.95rem; }
     .target-text { text-align: right; color: #374151; font-weight: 500; }
-    .perf-text { text-align: right; color: #111827; font-weight: 600; }
-
     /* --- [NEW] 보험사별 스플릿 뷰 전용 압축 스타일 --- */
     .award-split-view .award-summary {
-        grid-template-columns: 35px 1.8fr 80px 80px 1.4fr 1fr;
-        padding: 0.5rem 0.6rem;
-        min-height: 58px;
-        height: 58px; /* 행 높이 더 축소하여 더 많이 보이게 함 */
+        grid-template-columns: 2fr 1.2fr 1.1fr;
+        padding: 0.6rem 0.6rem;
+        min-height: 85px;
+        height: auto; 
+        align-items: center;
+        gap: 0.3rem; /* 컬럼 간 간격 축소 */
     }
     .award-split-view .award-table-header {
-        grid-template-columns: 35px 1.8fr 80px 80px 1.4fr 1fr;
-        padding: 0.4rem 0.6rem;
-        font-size: 0.65rem;
+        grid-template-columns: 2fr 1.2fr 1.1fr;
+        padding: 0.5rem 0.6rem;
+        font-size: 0.7rem;
+        gap: 0.3rem;
     }
     .award-split-view .award-summary * {
-        font-size: 0.7rem !important;
+        font-size: 0.75rem !important; /* 가독성 향상을 위해 텍스트 크기 소폭 증가 */
     }
     .award-split-view .payout-text {
-        font-size: 0.72rem !important;
-        line-height: 1.1;
+        font-size: 0.8rem !important;
+        line-height: 1.2;
+        white-space: normal; 
+        word-break: break-all;
+        text-align: right;
     }
     .award-split-view .progress-container {
-        height: 3px;
+        height: 4px;
+        margin-top: 4px;
+        margin-bottom: 2px;
     }
     .award-split-view .award-summary span {
-        padding: 1px 3px !important;
+        padding: 2px 4px !important;
     }
     .award-split-view .company-name {
         display: none;
     }
-    /* 스플릿 뷰에서는 카드 내부 타겟 텍스트 크기도 줄임 */
     .award-split-view .target-text, .award-split-view .perf-text {
-        font-size: 0.72rem !important;
+        font-size: 0.78rem !important;
+        white-space: normal;
+        word-break: break-all;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -691,7 +698,7 @@ def data_settings_modal():
         with col1:
             contracts_sheet = st.text_input("📄 계약 시트명", value="RAW_계약")
         with col2:
-            rules_sheets = st.text_input("📜 규칙 시트명", value="KB, 삼성")
+            rules_sheets = st.text_input("📜 규칙 시트명", value="KB, 삼성, DB")
         
         if st.button("📥 데이터 동기화", type="primary", use_container_width=True):
             try:
@@ -908,7 +915,8 @@ def render_metrics(summary: dict):
         .card-incentive { border: 1.5px solid #F3E8FF; }
         .card-total { border: 1px solid #F1F5F9; }
         .card-kb { border: 1.5px solid #FEF3C7; }
-        .card-others { border: 1.5px solid #D1FAE5; }
+        .card-db { border: 1.5px solid #D1FAE5; }
+        .card-others { border: 1.5px solid #E2E8F0; }
 
         .metric-title {
             font-size: 0.82rem;
@@ -933,7 +941,7 @@ def render_metrics(summary: dict):
         </style>
     """, unsafe_allow_html=True)
 
-    m_col1, m_col2, m_col3, m_col4, m_col5 = st.columns(5)
+    m_col1, m_col2, m_col3, m_col4, m_col5, m_col6 = st.columns(6)
     
     with m_col1:
         st.markdown(f"""
@@ -976,11 +984,21 @@ def render_metrics(summary: dict):
         """, unsafe_allow_html=True)
         
     with m_col5:
+        db_val = co_perf.get('DB', 0)
+        st.markdown(f"""
+            <div class="metric-card card-db">
+                <div class="metric-title">🟢 DB손해보험 실적</div>
+                <div class="metric-value" style="color: #047857;">{format_currency(db_val)}원</div>
+                <div class="metric-sub" style="color: transparent;">-</div>
+            </div>
+        """, unsafe_allow_html=True)
+        
+    with m_col6:
         others_val = co_perf.get('기타', 0)
         st.markdown(f"""
             <div class="metric-card card-others">
                 <div class="metric-title"> 기타 보험사 실적</div>
-                <div class="metric-value" style="color: #059669;">{format_currency(others_val)}원</div>
+                <div class="metric-value" style="color: #475569;">{format_currency(others_val)}원</div>
                 <div class="metric-sub" style="color: transparent;">-</div>
             </div>
         """, unsafe_allow_html=True)
@@ -1028,7 +1046,7 @@ def clean_html(html_str):
     cleaned = re.sub(r'\s+', ' ', no_newlines)
     return cleaned.strip()
 
-def get_award_card_html(group, period_str, status_color, status_icon, type_style, payout_display, is_imminent=False, is_past_missed=False, show_type_cat=True):
+def get_award_card_html(group, period_str, status_color, status_icon, type_style, payout_display, is_imminent=False, is_past_missed=False, show_type_cat=True, is_split_view=False):
     """시상 내역 카드 HTML 생성"""
     imminent_badge = ""
     if is_imminent:
@@ -1080,46 +1098,69 @@ def get_award_card_html(group, period_str, status_color, status_icon, type_style
         </div>
         """
     
-    html = f"""
-    <!-- Status Icon -->
-    <div style="display: flex; justify-content: center;">
-        {icon_html}
-    </div>
     
-    <!-- Award Name & Company -->
-    <div style="padding-right: 0.5rem; min-width: 0;">
-        <div style="font-weight: 700; font-size: 0.9rem; color: #111827; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" title="{group['name']}">{group['name']} {imminent_badge}</div>
-        <div class="company-name" style="font-size: 0.75rem; color: #9CA3AF; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{group['company']}</div>
-    </div>
-    
-    {type_cat_html}
-    
-    <!-- Period -->
-    <div style="font-size: 0.8rem; color: #6B7280; font-family: monospace;">
-        {period_str}
-    </div>
-    
-    <!-- Target -->
-    <div class="target-text">
-        {target_display}
-    </div>
-    
-    <!-- Performance & Progress -->
-    <div style="padding: 0 1rem;">
-        <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px;">
-            <span class="perf-text" style="font-size: 0.85rem;">{group['performance']:,.0f}</span>
-            <span style="font-size: 0.75rem; color: #6B7280; font-weight: 500;">{group['achievement']:.0f}%</span>
+    if is_split_view:
+        html = f"""
+        <!-- Award Name & Period -->
+        <div style="min-width: 0;">
+            <div style="font-weight: 700; color: #111827; margin-bottom: 2px; word-break: break-all; line-height: 1.3; font-size: 0.85rem;" title="{group['name']}">{group['name']} {imminent_badge}</div>
+            <div style="font-size: 0.75rem; color: #6B7280; font-family: monospace; word-break: break-all; white-space: normal; line-height: 1.2;">
+                {period_str}
+            </div>
         </div>
-        <div class="progress-container">
-            <div class="progress-bar" style="width: {progress_pct}%; background-color: {status_color}; shadow: 0 0 4px {status_color}44;"></div>
+        
+        <!-- Performance & Target -->
+        <div style="text-align: right;">
+            <div class="perf-text" style="font-size: 0.85rem; margin-bottom: 2px;">{group['performance']:,.0f}</div>
+            <div class="target-text" style="font-size: 0.75rem; color: #6B7280;">목표: {target_display}</div>
         </div>
-    </div>
-    
-    <!-- Payout -->
-    <div class="payout-text">
-        {payout_display}
-    </div>
-"""
+        
+        <!-- Payout -->
+        <div class="payout-text">
+            {payout_display}
+        </div>
+        """
+    else:
+        html = f"""
+        <!-- Status Icon -->
+        <div style="display: flex; justify-content: center;">
+            {icon_html}
+        </div>
+        
+        <!-- Award Name & Company -->
+        <div style="padding-right: 0.2rem; min-width: 0;">
+            <div style="font-weight: 700; color: #111827; margin-bottom: 2px; word-break: break-all; line-height: 1.3; font-size: 0.85rem;" title="{group['name']}">{group['name']} {imminent_badge}</div>
+            <div class="company-name" style="font-size: 0.75rem; color: #9CA3AF; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">{group['company']}</div>
+        </div>
+        
+        {type_cat_html}
+        
+        <!-- Period -->
+        <div style="font-size: 0.8rem; color: #6B7280; font-family: monospace; word-break: break-all; white-space: normal; line-height: 1.2;">
+            {period_str}
+        </div>
+        
+        <!-- Target -->
+        <div class="target-text">
+            {target_display}
+        </div>
+        
+        <!-- Performance & Progress -->
+        <div style="padding: 0 1rem;">
+            <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 2px;">
+                <span class="perf-text" style="font-size: 0.85rem;">{group['performance']:,.0f}</span>
+                <span style="font-size: 0.75rem; color: #6B7280; font-weight: 500;">{group['achievement']:.0f}%</span>
+            </div>
+            <div class="progress-container">
+                <div class="progress-bar" style="width: {progress_pct}%; background-color: {status_color}; shadow: 0 0 4px {status_color}44;"></div>
+            </div>
+        </div>
+        
+        <!-- Payout -->
+        <div class="payout-text">
+            {payout_display}
+        </div>
+        """
     return clean_html(html)
 
 def get_award_detail_html(group, period_stats, rows_df):
@@ -1644,7 +1685,7 @@ def render_results_table(results_df: pd.DataFrame):
         award_groups.sort(key=lambda x: x['start_date'] if pd.notna(x['start_date']) else pd.Timestamp.min)
     
     # --- 카드 렌더링 헬퍼 함수 ---
-    def _build_award_row_html(group, expand_all_flag=False, show_type_cat=True):
+    def _build_award_row_html(group, expand_all_flag=False, show_type_cat=True, is_split_view=False):
         """개별 시상 그룹을 HTML row로 변환"""
         is_imminent = False
         is_past_missed = False
@@ -1704,7 +1745,7 @@ def render_results_table(results_df: pd.DataFrame):
         if group['max_payout'] > 0:
             payout_display += f"<div style='font-size: 0.65rem; color: #94A3B8; font-weight: 400; margin-top: 2px;'>(최고 {group['max_payout']:,.0f}원)</div>"
         
-        row_content = get_award_card_html(group, period_str, status_color, status_icon, type_style, payout_display, is_imminent, is_past_missed, show_type_cat=show_type_cat)
+        row_content = get_award_card_html(group, period_str, status_color, status_icon, type_style, payout_display, is_imminent, is_past_missed, show_type_cat=show_type_cat, is_split_view=is_split_view)
         detail_content = get_award_detail_html(group, group.get('period_stats'), group['rows'])
         
         safe_id = f"award-{group['company']}-{group['name']}".replace(" ", "-").replace("_", "-")
@@ -1715,12 +1756,13 @@ def render_results_table(results_df: pd.DataFrame):
 
     def _render_award_table(groups_list, expand_all_flag=False, show_header=True, extra_class="", show_type_cat=True):
         """시상 그룹 리스트를 테이블로 렌더링 (통합/보험사별 공통)"""
+        is_split_view = "award-split-view" in extra_class
         table_rows_html = []
         for group in groups_list:
-            table_rows_html.append(_build_award_row_html(group, expand_all_flag, show_type_cat=show_type_cat))
+            table_rows_html.append(_build_award_row_html(group, expand_all_flag, show_type_cat=show_type_cat, is_split_view=is_split_view))
         
-        if "award-split-view" in extra_class:
-            header_columns = '<div style="text-align: center;">상태</div><div>시상명</div><div>기간</div><div style="text-align: right;">목표</div><div style="text-align: center;">실적/달성률</div><div style="text-align: right;">지급액</div>'
+        if is_split_view:
+            header_columns = '<div>시상명/기간</div><div style="text-align: right;">실적/목표</div><div style="text-align: right;">지급액</div>'
         else:
             header_columns = '<div style="text-align: center;">상태</div><div>시상명</div><div>유형</div><div>대상</div><div>기간</div><div style="text-align: right;">목표실적</div><div style="text-align: center;">실적 / 달성률</div><div style="text-align: right;">지급금액</div>'
             
@@ -1740,11 +1782,11 @@ def render_results_table(results_df: pd.DataFrame):
             </div>
         """), unsafe_allow_html=True)
     else:
-        # 보험사별 스플릿 뷰
-        # 삼성 / KB로 분리 (Group_ID 오름차순 정렬)
+        # 보험사별 스플릿 뷰 (3분할: 삼성, KB, DB)
         samsung_groups = [g for g in award_groups if '삼성' in str(g['company'])]
         kb_groups = [g for g in award_groups if 'KB' in str(g['company']).upper()]
-        other_groups = [g for g in award_groups if '삼성' not in str(g['company']) and 'KB' not in str(g['company']).upper()]
+        db_groups = [g for g in award_groups if 'DB' in str(g['company']).upper()]
+        other_groups = [g for g in award_groups if '삼성' not in str(g['company']) and 'KB' not in str(g['company']).upper() and 'DB' not in str(g['company']).upper()]
         
         # Group_ID 오름차순 정렬
         def sort_key_group_id(g):
@@ -1755,8 +1797,9 @@ def render_results_table(results_df: pd.DataFrame):
         
         samsung_groups.sort(key=sort_key_group_id)
         kb_groups.sort(key=sort_key_group_id)
+        db_groups.sort(key=sort_key_group_id)
         
-        col_left, col_right = st.columns(2)
+        col_left, col_mid, col_right = st.columns(3)
         
         with col_left:
             sam_total = sum(g['payout'] for g in samsung_groups)
@@ -1775,7 +1818,7 @@ def render_results_table(results_df: pd.DataFrame):
             else:
                 st.info("삼성화재 시상 내역이 없습니다.")
         
-        with col_right:
+        with col_mid:
             kb_total = sum(g['payout'] for g in kb_groups)
             st.markdown(f"""
                 <div style="background: linear-gradient(135deg, #B45309 0%, #F59E0B 100%); color: white; padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
@@ -1791,6 +1834,23 @@ def render_results_table(results_df: pd.DataFrame):
                 st.write(kb_html, unsafe_allow_html=True)
             else:
                 st.info("KB손해보험 시상 내역이 없습니다.")
+                
+        with col_right:
+            db_total = sum(g['payout'] for g in db_groups)
+            st.markdown(f"""
+                <div style="background: linear-gradient(135deg, #047857 0%, #10B981 100%); color: white; padding: 0.75rem 1rem; border-radius: 8px; margin-bottom: 0.5rem; display: flex; justify-content: space-between; align-items: center;">
+                    <div style="font-weight: 700; font-size: 1rem;">🟢 DB손해보험</div>
+                    <div style="display: flex; gap: 1rem; align-items: center;">
+                        <span style="font-size: 0.8rem; opacity: 0.9;">{len(db_groups)}개 시상</span>
+                        <span style="font-weight: 700; font-size: 1rem;">💰 {db_total:,.0f}원</span>
+                    </div>
+                </div>
+            """, unsafe_allow_html=True)
+            if db_groups:
+                db_html = _render_award_table(db_groups, expand_all, extra_class="award-split-view", show_type_cat=False)
+                st.write(db_html, unsafe_allow_html=True)
+            else:
+                st.info("DB손해보험 시상 내역이 없습니다.")
         
         # 기타 보험사가 있는 경우 하단에 표시
         if other_groups:
@@ -2428,14 +2488,17 @@ def main():
                     # 회사별 실적 집계 (지표 카드용)
                     kb_perf = 0
                     sam_perf = 0
+                    db_perf = 0
                     if '회사' in month_filtered_df.columns:
                         kb_perf = month_filtered_df[month_filtered_df['회사'].str.contains('KB', case=False, na=False)]['보험료'].sum()
                         sam_perf = month_filtered_df[month_filtered_df['회사'].str.contains('삼성', case=False, na=False)]['보험료'].sum()
+                        db_perf = month_filtered_df[month_filtered_df['회사'].str.contains('DB', case=False, na=False)]['보험료'].sum()
                     
                     summary['company_performance'] = {
                         'KB': kb_perf,
                         '삼성': sam_perf,
-                        '기타': max(0, summary['총실적'] - kb_perf - sam_perf)
+                        'DB': db_perf,
+                        '기타': max(0, summary['총실적'] - kb_perf - sam_perf - db_perf)
                     }
                     
                     summary['period_start'] = calc_params['period_start']
@@ -2451,11 +2514,11 @@ def main():
                     # 3. 월간 계약 데이터 상세 보기 (Expander)
                     with st.expander(f"📅 {calc_params['target_date'].strftime('%Y년 %m월')} {calc_params['agent_name']}님 상세 계약 내역", expanded=False):
                         if not month_filtered_df.empty:
-                            rename_map = {'설계사': '사원명', '모집인명': '사원명', '회사': '보험사', '원수사': '보험사'}
+                            rename_map = {'설계사': '모집인명', '사원명': '모집인명', '회사': '보험사', '원수사': '보험사'}
                             display_contracts = month_filtered_df.rename(columns=rename_map)
                             display_contracts = display_contracts.loc[:, ~display_contracts.columns.duplicated()]
                             
-                            target_cols = ['접수일', '보험사', '분류', '상품명', '보험료', '계약자']
+                            target_cols = ['접수일', '모집인명', '보험사', '분류', '상품명', '보험료', '계약자']
                             valid_cols = [c for c in target_cols if c in display_contracts.columns]
                             display_contracts = display_contracts[valid_cols].sort_values('접수일', ascending=False)
                             
@@ -2513,7 +2576,7 @@ def main():
                     
                     # 팀별 데이터 필터링
                     processed_all, _ = preprocess_contracts(st.session_state.contracts_df, agent_name=None)
-                    team_agents = processed_all[processed_all['지점'] == team_name]['사원명'].unique()
+                    team_agents = processed_all[processed_all['지점'] == team_name]['모집인명'].unique()
                     
                     # 1. 계약 데이터 필터링
                     team_contracts = filter_by_period(processed_all[processed_all['지점'] == team_name], 
@@ -2537,6 +2600,7 @@ def main():
                         'company_performance': {
                             'KB': team_agg['KB실적'].sum() if not team_agg.empty else 0,
                             '삼성': team_agg['삼성실적'].sum() if not team_agg.empty else 0,
+                            'DB': team_agg['DB실적'].sum() if not team_agg.empty else 0,
                             '기타': team_agg['기타실적'].sum() if not team_agg.empty else 0
                         },
                         '당월계약건수': len(team_contracts),
@@ -2555,11 +2619,11 @@ def main():
                     with st.expander(f"📅 {calc_params['target_date'].strftime('%Y년 %m월')} {team_name} 전체 계약 내역 상세보기", expanded=False):
                         if not team_contracts.empty:
                             # 컬럼명 표준화 및 가공 로직
-                            rename_map = {'설계사': '사원명', '모집인명': '사원명', '회사': '보험사', '원수사': '보험사'}
+                            rename_map = {'설계사': '모집인명', '사원명': '모집인명', '회사': '보험사', '원수사': '보험사'}
                             display_contracts = team_contracts.rename(columns=rename_map)
                             display_contracts = display_contracts.loc[:, ~display_contracts.columns.duplicated()]
                             
-                            target_cols = ['접수일', '사원명', '보험사', '분류', '상품명', '보험료', '계약자']
+                            target_cols = ['접수일', '모집인명', '보험사', '분류', '상품명', '보험료', '계약자']
                             valid_cols = [c for c in target_cols if c in display_contracts.columns]
                             display_contracts = display_contracts[valid_cols].sort_values('접수일', ascending=False)
                             
@@ -2699,7 +2763,7 @@ def main():
                         agent_groups = filtered_all.groupby('설계사')
                         
                         for agent, group in agent_groups:
-                            p_df = processed_df[processed_df['사원명'] == agent]
+                            p_df = processed_df[processed_df['모집인명'] == agent]
                             month_filtered_p_df = filter_by_period(p_df, calc_params['period_start'], calc_params['period_end'])
                             t_perf = month_filtered_p_df['보험료'].sum()
                             
@@ -2708,13 +2772,16 @@ def main():
                             # 회사별 지표
                             kb_pay = group[(group['회사'].str.contains('KB', case=False, na=False)) & (group['선택여부'] == True)]['최종지급금액'].sum()
                             sam_pay = group[(group['회사'].str.contains('삼성', case=False, na=False)) & (group['선택여부'] == True)]['최종지급금액'].sum()
+                            db_pay = group[(group['회사'].str.contains('DB', case=False, na=False)) & (group['선택여부'] == True)]['최종지급금액'].sum()
                             kb_perf = 0
                             sam_perf = 0
+                            db_perf = 0
                             if '회사' in month_filtered_p_df.columns:
                                 kb_perf = month_filtered_p_df[month_filtered_p_df['회사'].str.contains('KB', case=False, na=False)]['보험료'].sum()
                                 sam_perf = month_filtered_p_df[month_filtered_p_df['회사'].str.contains('삼성', case=False, na=False)]['보험료'].sum()
+                                db_perf = month_filtered_p_df[month_filtered_p_df['회사'].str.contains('DB', case=False, na=False)]['보험료'].sum()
 
-                            others_perf = max(0, t_perf - kb_perf - sam_perf)
+                            others_perf = max(0, t_perf - kb_perf - sam_perf - db_perf)
 
                             if total_payout > 0 or t_perf > 0:
                                 agent_payouts.append({
@@ -2725,6 +2792,7 @@ def main():
                                     '총실적': t_perf,
                                     'KB실적': kb_perf,
                                     '삼성실적': sam_perf,
+                                    'DB실적': db_perf,
                                     '기타실적': others_perf,
                                     '코칭필요': any(80 <= r.get('달성률', 0) < 100 for _, r in group.iterrows()),
                                     '놓친기회금액': sum(max(0, r.get('지급금액', 0) - r.get('최종지급금액', 0)) for _, r in group.iterrows() if 80 <= r.get('달성률', 0) < 100)
@@ -2737,6 +2805,7 @@ def main():
                             'company_performance': {
                                 'KB': agg_df['KB실적'].sum() if not agg_df.empty else 0,
                                 '삼성': agg_df['삼성실적'].sum() if not agg_df.empty else 0,
+                                'DB': agg_df['DB실적'].sum() if not agg_df.empty else 0,
                                 '기타': agg_df['기타실적'].sum() if not agg_df.empty else 0
                             },
                             '당월계약건수': len(processed_df[(processed_df['접수일'] >= pd.Timestamp(calc_params['period_start'])) & (processed_df['접수일'] <= pd.Timestamp(calc_params['period_end']))])
@@ -2761,11 +2830,11 @@ def main():
                         with st.expander(f"📅 {calc_params['target_date'].strftime('%Y년 %m월')} 전체 계약 내역 상세보기", expanded=False):
                             if not monthly_stats_df.empty:
                                 # 컬럼명 표준화 및 가공 로직
-                                rename_map = {'설계사': '사원명', '모집인명': '사원명', '회사': '보험사', '원수사': '보험사'}
+                                rename_map = {'설계사': '모집인명', '사원명': '모집인명', '회사': '보험사', '원수사': '보험사'}
                                 display_contracts = monthly_stats_df.rename(columns=rename_map)
                                 display_contracts = display_contracts.loc[:, ~display_contracts.columns.duplicated()]
                                 
-                                target_cols = ['접수일', '사원명', '보험사', '분류', '상품명', '보험료', '계약자']
+                                target_cols = ['접수일', '모집인명', '보험사', '분류', '상품명', '보험료', '계약자']
                                 valid_cols = [c for c in target_cols if c in display_contracts.columns]
                                 display_contracts = display_contracts[valid_cols].sort_values('접수일', ascending=False)
                                 
@@ -2797,6 +2866,7 @@ def main():
                                 '총지급액': 'sum',
                                 'KB실적': 'sum',
                                 '삼성실적': 'sum',
+                                'DB실적': 'sum',
                                 '기타실적': 'sum',
                                 '코칭필요': 'sum'
                             }).reset_index()
@@ -2825,7 +2895,8 @@ def main():
                                     <div style="flex:1.2; text-align:right;">전체 실적</div>
                                     <div style="flex:1; text-align:right; color:#2563EB;">🔵 삼성</div>
                                     <div style="flex:1; text-align:right; color:#D97706;">🟡 KB</div>
-                                    <div style="flex:1; text-align:right; color:#059669;">🟢 기타</div>
+                                    <div style="flex:1; text-align:right; color:#047857;">🟢 DB</div>
+                                    <div style="flex:1; text-align:right; color:#059669;">기타</div>
                                     <div style="flex:0.8; text-align:center;">상세</div>
                                 </div>
                                 """, unsafe_allow_html=True)
@@ -2833,7 +2904,7 @@ def main():
                                 # 팀별 행 렌더링
                                 for t_idx, t_row in sorted_team_summary.iterrows():
                                     with st.container():
-                                        cols = st.columns([1.2, 1.2, 0.8, 1.2, 1, 1, 1, 0.8], vertical_alignment="center")
+                                        cols = st.columns([1.2, 1.2, 0.8, 1.2, 1, 1, 1, 1, 0.8], vertical_alignment="center")
                                         with cols[0]:
                                             st.markdown(f"<div style='font-weight:600; color:#1F2937;'>{t_row['소속']} <span style='font-size:0.8em; color:#9CA3AF; font-weight:400;'>({t_row['설계사']}명)</span></div>", unsafe_allow_html=True)
                                         with cols[1]:
@@ -2847,8 +2918,10 @@ def main():
                                         with cols[5]:
                                             st.markdown(f"<div style='text-align:right; color:#6B7280; font-size:0.9rem;'>{t_row['KB실적']:,.0f}</div>", unsafe_allow_html=True)
                                         with cols[6]:
-                                            st.markdown(f"<div style='text-align:right; color:#6B7280; font-size:0.9rem;'>{t_row['기타실적']:,.0f}</div>", unsafe_allow_html=True)
+                                            st.markdown(f"<div style='text-align:right; color:#6B7280; font-size:0.9rem;'>{t_row['DB실적']:,.0f}</div>", unsafe_allow_html=True)
                                         with cols[7]:
+                                            st.markdown(f"<div style='text-align:right; color:#6B7280; font-size:0.9rem;'>{t_row['기타실적']:,.0f}</div>", unsafe_allow_html=True)
+                                        with cols[8]:
                                             # Removed use_container_width to keep it small and centered
                                             if st.button("상세", key=f"team_list_btn_{t_idx}"):
                                                 st.session_state.selected_team = t_row['소속']
@@ -2908,7 +2981,8 @@ def main():
                                     <div style="flex:1.2; text-align:right;">전체 실적</div>
                                     <div style="flex:1; text-align:right; color:#2563EB;">🔵 삼성</div>
                                     <div style="flex:1; text-align:right; color:#D97706;">🟡 KB</div>
-                                    <div style="flex:1; text-align:right; color:#059669;">🟢 기타</div>
+                                    <div style="flex:1; text-align:right; color:#047857;">🟢 DB</div>
+                                    <div style="flex:1; text-align:right; color:#059669;">기타</div>
                                     <div style="flex:0.8; text-align:center;">상세</div>
                                 </div>
                                 """, unsafe_allow_html=True)
@@ -2916,7 +2990,7 @@ def main():
                                 # 설계사별 행 렌더링
                                 for idx, row in sorted_agent_df.iterrows():
                                     with st.container():
-                                        cols = st.columns([1.2, 1.2, 0.8, 1.2, 1, 1, 1, 0.8], vertical_alignment="center")
+                                        cols = st.columns([1.2, 1.2, 0.8, 1.2, 1, 1, 1, 1, 0.8], vertical_alignment="center")
                                         
                                         # [설계사 / 지점]
                                         with cols[0]:
@@ -2939,8 +3013,10 @@ def main():
                                         with cols[5]:
                                             st.markdown(f"<div style='text-align:right; color:#6B7280; font-size:0.9rem;'>{row['KB실적']:,.0f}</div>", unsafe_allow_html=True)
                                         with cols[6]:
-                                            st.markdown(f"<div style='text-align:right; color:#6B7280; font-size:0.9rem;'>{row['기타실적']:,.0f}</div>", unsafe_allow_html=True)
+                                            st.markdown(f"<div style='text-align:right; color:#6B7280; font-size:0.9rem;'>{row['DB실적']:,.0f}</div>", unsafe_allow_html=True)
                                         with cols[7]:
+                                            st.markdown(f"<div style='text-align:right; color:#6B7280; font-size:0.9rem;'>{row['기타실적']:,.0f}</div>", unsafe_allow_html=True)
+                                        with cols[8]:
                                             # Removed use_container_width to keep it small and centered
                                             if st.button("상세", key=f"agent_list_btn_{idx}"):
                                                 st.session_state.selected_agent = row['설계사']

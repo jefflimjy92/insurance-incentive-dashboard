@@ -400,10 +400,25 @@ def calc_continuous_type(contracts: pd.DataFrame, rule_group: pd.DataFrame,
             if 'contracts' in p_v:
                 all_contracts_list.extend(p_v['contracts'])
 
+        # --- 지급월 판별 로직 ---
+        # 연속형 시상은 "마지막 구간이 끝나는 월"에만 지급액을 반영함
+        is_payout_month = True
+        if total_periods in period_stats:
+            last_p_end = period_stats[total_periods]['end']
+            if pd.notna(last_p_end) and pd.notna(period_end):
+                # period_end(조회 기준월 마지막일)의 연/월과 마지막 구간 종료일(last_p_end)의 연/월 비교
+                p_end_obj = pd.Timestamp(last_p_end)
+                curr_end_obj = pd.Timestamp(period_end)
+                if p_end_obj.year != curr_end_obj.year or p_end_obj.month != curr_end_obj.month:
+                    is_payout_month = False
+                    
+        payable_reward = final_reward if is_payout_month else 0
+
         return {
             '실적': period_stats[total_periods]['perf'] if total_periods in period_stats else 0,
-            '지급금액': final_reward,
-            '최종지급금액': final_reward,
+            '지급금액': payable_reward,
+            '최종지급금액': payable_reward,
+            '예상지급금액': final_reward if not is_payout_month else 0, # 현재 월이 지급월이 아니면 예상지급금액으로 노출
             '달성단계': 1 if final_reward > 0 else 0,
             '달성률': 100.0 if final_reward > 0 else 0.0, # 단순화
             '부족금액': 0,
@@ -821,17 +836,17 @@ def calculate_all_agents_awards(contracts: pd.DataFrame, rules: pd.DataFrame,
                     rule_consecutive_map[(company, award_name, award_type)] = matched.drop(columns=['__clean_name', '__clean_company'])
 
     # 2. 설계사별 그룹화
-    if '사원명' not in contracts.columns:
+    if '모집인명' not in contracts.columns:
         agents = ['Unknown']
         contracts = contracts.copy()
-        contracts['사원명'] = 'Unknown'
+        contracts['모집인명'] = 'Unknown'
     else:
-        agents = contracts['사원명'].unique()
+        agents = contracts['모집인명'].unique()
     
     all_results = []
     
     for agent in agents:
-        agent_contracts = contracts[contracts['사원명'] == agent]
+        agent_contracts = contracts[contracts['모집인명'] == agent]
         
         # 3. 각 설계사별 시상 계산
         results = calculate_all_awards(
