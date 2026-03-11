@@ -897,8 +897,8 @@ def render_metrics(summary: dict):
         .metric-card {
             background-color: #FFFFFF;
             border-radius: 12px;
-            padding: 1.5rem;
-            height: 125px;
+            padding: 1.0rem 0.8rem;
+            height: 100px;
             display: flex;
             flex-direction: column;
             justify-content: center;
@@ -919,27 +919,51 @@ def render_metrics(summary: dict):
         .card-others { border: 1.5px solid #E2E8F0; }
 
         .metric-title {
-            font-size: 0.82rem;
-            font-weight: 600;
+            font-size: 0.65rem;
+            font-weight: 700;
             color: #64748B;
             display: flex;
             align-items: center;
-            gap: 6px;
-            margin-bottom: 12px;
+            gap: 2px;
+            margin-bottom: 6px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            letter-spacing: -0.05em;
+        }
+        .metric-value-container {
+            display: flex;
+            align-items: baseline;
+            gap: 1px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         .metric-value {
-            font-size: 1.4rem;
-            font-weight: 600;
+            font-size: 20px;
+            font-weight: 800;
             color: #1E293B;
-            letter-spacing: -0.02em;
+            letter-spacing: -0.07em;
+            white-space: nowrap;
+        }
+        .metric-unit {
+            font-size: 14px;
+            font-weight: 600;
         }
         .metric-sub {
-            font-size: 0.75rem;
-            font-weight: 500;
-            margin-top: 6px;
+            font-size: 0.60rem;
+            font-weight: 600;
+            margin-top: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            letter-spacing: -0.05em;
         }
         </style>
     """, unsafe_allow_html=True)
+
+    def format_currency(val):
+        return f"{int(val):,}"
 
     m_col1, m_col2, m_col3, m_col4, m_col5, m_col6 = st.columns(6)
     
@@ -947,9 +971,11 @@ def render_metrics(summary: dict):
         st.markdown(f"""
             <div class="metric-card card-incentive">
                 <div class="metric-title">🏢 총 지급 인센티브</div>
-                <div class="metric-value" style="color: #6D28D9;">{format_currency(total_incentive)}원</div>
+                <div class="metric-value-container" style="color: #6D28D9;">
+                    <span class="metric-value" style="color: #6D28D9;">{format_currency(total_incentive)}</span><span class="metric-unit" style="color: #6D28D9;">원</span>
+                </div>
                 <div class="metric-sub" style="color: #10B981;">
-                    ▲ 전체 실적 대비 {pct_incentive:.1f}% 지출
+                    ▲ 실적 대비 {pct_incentive:.1f}% 지출
                 </div>
             </div>
         """, unsafe_allow_html=True)
@@ -958,7 +984,9 @@ def render_metrics(summary: dict):
         st.markdown(f"""
             <div class="metric-card card-total">
                 <div class="metric-title">📊 전체 실적 합계</div>
-                <div class="metric-value" style="color: #1E293B;">{format_currency(total_performance)}원</div>
+                <div class="metric-value-container" style="color: #1E293B;">
+                    <span class="metric-value">{format_currency(total_performance)}</span><span class="metric-unit">원</span>
+                </div>
                 <div class="metric-sub" style="color: transparent;">-</div>
             </div>
         """, unsafe_allow_html=True)
@@ -968,7 +996,9 @@ def render_metrics(summary: dict):
         st.markdown(f"""
             <div class="metric-card card-samsung">
                 <div class="metric-title">🔵 삼성화재 실적</div>
-                <div class="metric-value" style="color: #1D4ED8;">{format_currency(samsung_val)}원</div>
+                <div class="metric-value-container" style="color: #1D4ED8;">
+                    <span class="metric-value" style="color: #1D4ED8;">{format_currency(samsung_val)}</span><span class="metric-unit" style="color: #1D4ED8;">원</span>
+                </div>
                 <div class="metric-sub" style="color: transparent;">-</div>
             </div>
         """, unsafe_allow_html=True)
@@ -978,7 +1008,9 @@ def render_metrics(summary: dict):
         st.markdown(f"""
             <div class="metric-card card-kb">
                 <div class="metric-title">🟡 KB손해보험 실적</div>
-                <div class="metric-value" style="color: #D97706;">{format_currency(kb_val)}원</div>
+                <div class="metric-value-container" style="color: #D97706;">
+                    <span class="metric-value" style="color: #D97706;">{format_currency(kb_val)}</span><span class="metric-unit" style="color: #D97706;">원</span>
+                </div>
                 <div class="metric-sub" style="color: transparent;">-</div>
             </div>
         """, unsafe_allow_html=True)
@@ -988,7 +1020,9 @@ def render_metrics(summary: dict):
         st.markdown(f"""
             <div class="metric-card card-db">
                 <div class="metric-title">🟢 DB손해보험 실적</div>
-                <div class="metric-value" style="color: #047857;">{format_currency(db_val)}원</div>
+                <div class="metric-value-container" style="color: #047857;">
+                    <span class="metric-value" style="color: #047857;">{format_currency(db_val)}</span><span class="metric-unit" style="color: #047857;">원</span>
+                </div>
                 <div class="metric-sub" style="color: transparent;">-</div>
             </div>
         """, unsafe_allow_html=True)
@@ -997,8 +1031,10 @@ def render_metrics(summary: dict):
         others_val = co_perf.get('기타', 0)
         st.markdown(f"""
             <div class="metric-card card-others">
-                <div class="metric-title"> 기타 보험사 실적</div>
-                <div class="metric-value" style="color: #475569;">{format_currency(others_val)}원</div>
+                <div class="metric-title">기타 보험사 실적</div>
+                <div class="metric-value-container" style="color: #475569;">
+                    <span class="metric-value" style="color: #475569;">{format_currency(others_val)}</span><span class="metric-unit" style="color: #475569;">원</span>
+                </div>
                 <div class="metric-sub" style="color: transparent;">-</div>
             </div>
         """, unsafe_allow_html=True)
