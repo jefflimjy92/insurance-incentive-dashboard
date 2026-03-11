@@ -85,6 +85,59 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
+# --- Authentication Logic ---
+def check_password():
+    """Returns `True` if the user had the correct password."""
+    
+    def password_entered():
+        """Checks whether a password entered by the user is correct."""
+        valid_passwords = ["cix0523@", "ejqkekqhgja!", "Jenhj1122."]
+        if st.session_state.get("password", "") in valid_passwords:
+            st.session_state["password_correct"] = True
+            if "password" in st.session_state:
+                del st.session_state["password"]  # don't store password
+        else:
+            st.session_state["password_correct"] = False
+
+    if "password_correct" not in st.session_state:
+        # First run, show input for password.
+        st.markdown("<h2 style='text-align: center; margin-top: 100px;'>더바다인슈 실적 현황 대시보드</h2>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center;'>접근 권한이 필요합니다. 비밀번호를 입력해 주세요.</p>", unsafe_allow_html=True)
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            st.text_input(
+                "Password", type="password", on_change=password_entered, key="password", label_visibility="collapsed", placeholder="비밀번호"
+            )
+            dist_col1, dist_col2, dist_col3 = st.columns([1, 1, 1])
+            with dist_col2:
+                st.button("로그인", on_click=password_entered, use_container_width=True)
+        return False
+    elif not st.session_state["password_correct"]:
+        # Password not correct, show input + error.
+        st.markdown("<h2 style='text-align: center; margin-top: 100px;'>더바다인슈 실적 현황 대시보드</h2>", unsafe_allow_html=True)
+        st.markdown("<p style='text-align: center;'>접근 권한이 필요합니다. 비밀번호를 입력해 주세요.</p>", unsafe_allow_html=True)
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            st.text_input(
+                "Password", type="password", on_change=password_entered, key="password", label_visibility="collapsed", placeholder="비밀번호"
+            )
+            dist_col1, dist_col2, dist_col3 = st.columns([1, 1, 1])
+            with dist_col2:
+                st.button("로그인", on_click=password_entered, use_container_width=True)
+            st.error("비밀번호가 올바르지 않습니다.")
+        return False
+    else:
+        # Password correct.
+        return True
+
+if not check_password():
+    st.stop()  # Do not continue if check_password is not True.
+# ----------------------------
+
+# 구글 시트 연결 정보
+SCOPES = ['https://www.googleapis.com/auth/spreadsheets.readonly']
+SPREADSHEET_ID = '1Q8UfO4qI5K8w_T6Fh8i-Iofb5B0I_4H2yE6e0j-c1i4'
+RANGE_NAME = 'RAWDATA!A2:K'
 # 커스텀 CSS (Figma 디자인 기반 - 고대비 네이비 & 라이트 그레이)
 st.markdown("""
 <style>
