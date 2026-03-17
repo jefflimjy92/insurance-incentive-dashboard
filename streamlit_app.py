@@ -1991,22 +1991,73 @@ def render_product_statistics(contracts_df: pd.DataFrame):
 def render_performance_charts(contracts_df: pd.DataFrame, results_df: pd.DataFrame = None, display_period_start: datetime = None, display_period_end: datetime = None):
     """3. 실적 분석 추이 및 상세 내역 (차트)"""
     st.markdown('<div id="trend-section"></div>', unsafe_allow_html=True)
-    
+
+    # 전월 비교를 위해 필터링 전 원본 보관
+    all_contracts_df = contracts_df.copy()
+
     # 조회 기간이 명시된 경우 해당 기간으로 먼저 타이트하게 필터링
     if display_period_start and display_period_end:
         from data_loader import filter_by_period
         contracts_df = filter_by_period(contracts_df, display_period_start, display_period_end)
-    
-    # 헤더
-    st.subheader("📈 실적 분석 추이 및 상세 내역")
+
+    # 헤더 + 전월 비교 토글
+    header_col, toggle_col = st.columns([6, 4])
+    with header_col:
+        st.subheader("📈 실적 분석 추이 및 상세 내역")
+    with toggle_col:
+        st.write("")  # spacing
+        # 고유 키: 호출 위치별로 구분 (period + caller context)
+        toggle_key = f"prev_month_toggle_{display_period_start}_{display_period_end}"
+        show_prev_month = st.toggle("📊 전월 비교", value=False, key=toggle_key)
+
     chart_view = "모두 보기" # 고정값으로 설정 (버튼 제거)
-    
+
     # 데이터 준비 및 필터링
     start_date = display_period_start
     end_date = display_period_end
     if (not start_date or not end_date) and results_df is not None and not results_df.empty:
         start_date = results_df['시작일'].min()
         end_date = results_df['종료일'].max()
+
+    # 전월 데이터 준비
+    prev_merged_df = None
+    prev_cumulative_df = None
+    if show_prev_month and start_date and end_date:
+        from dateutil.relativedelta import relativedelta
+        from data_loader import filter_by_period as fp
+        prev_start = pd.Timestamp(start_date) - relativedelta(months=1)
+        prev_end = pd.Timestamp(end_date) - relativedelta(months=1)
+        # 전월 말일 보정 (예: 3/31 -> 2/28)
+        import calendar
+        last_day = calendar.monthrange(prev_end.year, prev_end.month)[1]
+        if prev_end.day > last_day:
+            prev_end = prev_end.replace(day=last_day)
+
+        prev_contracts = fp(all_contracts_df, prev_start, prev_end)
+        prev_daily_df = get_daily_trend(prev_contracts)
+        if not prev_daily_df.empty:
+            prev_daily_df['날짜'] = pd.to_datetime(prev_daily_df['날짜'])
+            prev_full_range = pd.date_range(start=prev_start, end=prev_end, freq='D')
+            prev_full_df = pd.DataFrame({'날짜': prev_full_range})
+            prev_merged_df = pd.merge(prev_full_df, prev_daily_df, on='날짜', how='left').fillna(0)
+            prev_merged_df['누적실적'] = prev_merged_df['누적실적'].replace(0, np.nan).ffill().fillna(0)
+
+            # 전월 날짜를 당월 기준 "일차"로 변환 (X축 정렬용)
+            prev_merged_df['일차'] = (prev_merged_df['날짜'] - prev_start).dt.days
+            # 당월 날짜로 매핑 (차트에서 같은 X축 사용)
+            prev_merged_df['표시날짜'] = prev_merged_df['일차'].apply(
+                lambda d: pd.Timestamp(start_date) + pd.Timedelta(days=d)
+            )
+            # 전월 범위를 넘어가는 날짜 제거
+            prev_merged_df = prev_merged_df[prev_merged_df['표시날짜'] <= pd.Timestamp(end_date)]
+
+            # 누적 데이터 (마지막 실적일까지만)
+            prev_actual = prev_merged_df[prev_merged_df['일실적'] > 0]
+            if not prev_actual.empty:
+                prev_last_sale = prev_actual['날짜'].max()
+                prev_cumulative_df = prev_merged_df[prev_merged_df['날짜'] <= prev_last_sale].copy()
+            else:
+                prev_cumulative_df = prev_merged_df.copy()
 
     daily_df = get_daily_trend(contracts_df)
     if not daily_df.empty:
@@ -2117,7 +2168,50 @@ def render_performance_charts(contracts_df: pd.DataFrame, results_df: pd.DataFra
                     text=alt.Text('label_text:N')
                 )
 
-                cumulative_final = alt.layer(cumulative_area, cumulative_last_mark, cumulative_label).properties(
+                # [전월 비교] 누적 차트 오버레이
+                prev_cumulative_layers = []
+                if show_prev_month and prev_cumulative_df is not None and not prev_cumulative_df.empty:
+                    prev_cum_chart_df = prev_cumulative_df.rename(columns={'표시날짜': '날짜_표시', '누적실적': '전월누적'})
+                    prev_cum_base = alt.Chart(prev_cum_chart_df).transform_calculate(
+                        prev_label="format(round(datum.전월누적 / 10000), ',d') + '만'"
+                    ).encode(
+                        x=alt.X('yearmonthdate(날짜_표시):T', title=None,
+                            scale=alt.Scale(domain=x_domain) if x_domain else alt.Undefined,
+                            axis=alt.Axis(labels=False, ticks=False, grid=False)
+                        )
+                    )
+                    # 전월 누적 선 (점선, 연한 주황)
+                    prev_cum_line = prev_cum_base.mark_line(
+                        strokeDash=[6, 4], strokeWidth=2, color='#FDBA74', interpolate='monotone', opacity=0.7
+                    ).encode(
+                        y=alt.Y('전월누적:Q'),
+                        tooltip=[
+                            alt.Tooltip('날짜:T', title="전월 날짜", format='%Y-%m-%d'),
+                            alt.Tooltip('전월누적:Q', format=',.0f', title="전월 누적")
+                        ]
+                    )
+                    # 전월 마지막 포인트
+                    prev_last = prev_cum_chart_df.tail(1)
+                    prev_last_base = alt.Chart(prev_last).transform_calculate(
+                        prev_label="format(round(datum.전월누적 / 10000), ',d') + '만'"
+                    ).encode(
+                        x=alt.X('yearmonthdate(날짜_표시):T',
+                            scale=alt.Scale(domain=x_domain) if x_domain else alt.Undefined,
+                            axis=alt.Axis(labels=False, ticks=False, grid=False)),
+                        y=alt.Y('전월누적:Q')
+                    )
+                    prev_last_mark = prev_last_base.mark_point(
+                        size=40, color='#FDBA74', fill='white', strokeWidth=1.5, opacity=0.7
+                    )
+                    prev_last_label = prev_last_base.mark_text(
+                        align='left', dx=8, fontSize=10, fontWeight='bold', color='#FB923C', baseline='middle'
+                    ).encode(text=alt.Text('prev_label:N'))
+
+                    prev_cumulative_layers = [prev_cum_line, prev_last_mark, prev_last_label]
+
+                cumulative_final = alt.layer(
+                    *prev_cumulative_layers, cumulative_area, cumulative_last_mark, cumulative_label
+                ).properties(
                     height=280 if chart_view == "모두 보기" else 350
                 )
 
@@ -2148,9 +2242,68 @@ def render_performance_charts(contracts_df: pd.DataFrame, results_df: pd.DataFra
                     text=alt.Text('label_text:N')
                 ).transform_filter(alt.datum.일실적 >= 5000) # 0.5만 이상인 경우만 표시
 
-                daily_final = alt.layer(daily_bar, daily_label).properties(
-                    height=280 if chart_view == "모두 보기" else 350
-                )
+                # [전월 비교] 일별 차트 - 당월: 막대, 전월: 선 그래프
+                if show_prev_month and prev_merged_df is not None and not prev_merged_df.empty:
+                    prev_line_df = prev_merged_df.rename(columns={'표시날짜': '날짜_표시', '일실적': '전월일실적'})
+                    prev_line_df['날짜_표시'] = pd.to_datetime(prev_line_df['날짜_표시'])
+
+                    prev_line_base = alt.Chart(prev_line_df).transform_calculate(
+                        prev_label="format(round(datum.전월일실적 / 10000), ',d') + '만'"
+                    ).encode(
+                        x=alt.X('yearmonthdate(날짜_표시):T', title=None,
+                            scale=alt.Scale(domain=x_domain) if x_domain else alt.Undefined,
+                            axis=alt.Axis(labels=False, ticks=False, grid=False)
+                        )
+                    )
+
+                    # 전월 선 그래프 (점선 + 연한 색상)
+                    prev_line = prev_line_base.mark_line(
+                        strokeDash=[6, 4], strokeWidth=2, color='#FDBA74', interpolate='monotone', opacity=0.7
+                    ).encode(
+                        y=alt.Y('전월일실적:Q'),
+                        tooltip=[
+                            alt.Tooltip('날짜:T', title="전월 날짜", format='%Y-%m-%d'),
+                            alt.Tooltip('전월일실적:Q', format=',.0f', title="전월 일실적")
+                        ]
+                    )
+
+                    # 전월 포인트 마커
+                    prev_points = prev_line_base.mark_point(
+                        size=25, color='#FDBA74', fill='#FDBA74', opacity=0.6
+                    ).encode(
+                        y=alt.Y('전월일실적:Q')
+                    ).transform_filter(alt.datum.전월일실적 > 0)
+
+                    # 전월 라벨 (큰 값만)
+                    prev_line_label = prev_line_base.mark_text(
+                        align='center', baseline='bottom', dy=-8, fontSize=8, fontWeight='bold', color='#FB923C'
+                    ).encode(
+                        y=alt.Y('전월일실적:Q'),
+                        text=alt.Text('prev_label:N')
+                    ).transform_filter(alt.datum.전월일실적 >= 5000)
+
+                    daily_final = alt.layer(
+                        daily_bar, daily_label, prev_line, prev_points, prev_line_label
+                    ).resolve_scale(y='shared').properties(
+                        height=280 if chart_view == "모두 보기" else 350
+                    )
+                else:
+                    daily_final = alt.layer(daily_bar, daily_label).properties(
+                        height=280 if chart_view == "모두 보기" else 350
+                    )
+
+                # 전월 비교 범례 표시
+                if show_prev_month and prev_merged_df is not None and not prev_merged_df.empty:
+                    from dateutil.relativedelta import relativedelta as rd
+                    prev_m = pd.Timestamp(start_date) - rd(months=1)
+                    cur_m = pd.Timestamp(start_date)
+                    st.markdown(
+                        f'<div style="display:flex;gap:20px;margin-bottom:8px;font-size:13px;">'
+                        f'<span style="color:#6366F1;">● {cur_m.month}월 (당월)</span>'
+                        f'<span style="color:#FB923C;">- - - {prev_m.month}월 (전월)</span>'
+                        f'</div>',
+                        unsafe_allow_html=True
+                    )
 
                 # 차트 출력
                 if chart_view == "누적 추이":
@@ -2162,29 +2315,70 @@ def render_performance_charts(contracts_df: pd.DataFrame, results_df: pd.DataFra
                     st.altair_chart(daily_final, use_container_width=True)
 
             with side_col:
-                
+
                 weekday_map = {0: '월', 1: '화', 2: '수', 3: '목', 4: '금', 5: '토', 6: '일'}
                 table_df = merged_df.copy()
                 table_df['날짜_dt'] = pd.to_datetime(table_df['날짜'])
                 table_df['표시날짜'] = table_df['날짜_dt'].apply(lambda x: f"{x.strftime('%m/%d')} ({weekday_map[x.weekday()]})")
                 table_df = table_df.rename(columns={'일실적': '일일', '누적실적': '누적'})
-                
-                st.dataframe(
-                    table_df[['날짜_dt', '표시날짜', '일일', '누적']].sort_values('날짜_dt', ascending=True).style.format({
-                        '일일': '{:,.0f}원',
-                        '누적': '{:,.0f}원'
-                    }),
-                    column_config={
-                        "날짜_dt": None,
-                        "표시날짜": st.column_config.TextColumn("날짜", width="small"),
-                        "일일": st.column_config.TextColumn("일일", width="small"),
-                        "누적": st.column_config.TextColumn("누적", width="small")
-                    },
-                    use_container_width=True,
-                    hide_index=True,
-                    column_order=("표시날짜", "일일", "누적"),
-                    height=600 if chart_view == "모두 보기" else 350
-                )
+
+                if show_prev_month and prev_merged_df is not None and not prev_merged_df.empty:
+                    from dateutil.relativedelta import relativedelta as rd2
+                    # 전월 데이터를 일차 기준으로 매핑하여 병합
+                    prev_table = prev_merged_df[['날짜', '표시날짜', '일실적', '누적실적']].copy()
+                    prev_table = prev_table.rename(columns={
+                        '표시날짜': '날짜_dt', '날짜': '전월날짜_raw',
+                        '일실적': '전월일일', '누적실적': '전월누적'
+                    })
+                    prev_table['날짜_dt'] = pd.to_datetime(prev_table['날짜_dt'])
+                    prev_table['전월날짜_raw'] = pd.to_datetime(prev_table['전월날짜_raw'])
+                    prev_table['전월날짜'] = prev_table['전월날짜_raw'].apply(
+                        lambda x: f"{x.strftime('%m/%d')} ({weekday_map[x.weekday()]})"
+                    )
+                    table_df['날짜_dt'] = pd.to_datetime(table_df['날짜_dt'])
+                    table_df = pd.merge(table_df, prev_table[['날짜_dt', '전월날짜', '전월일일', '전월누적']],
+                                        on='날짜_dt', how='left').fillna(0)
+                    # 전월날짜가 0으로 채워진 경우 빈 문자열로
+                    table_df['전월날짜'] = table_df['전월날짜'].replace(0, '')
+
+                    st.dataframe(
+                        table_df[['날짜_dt', '표시날짜', '일일', '누적', '전월날짜', '전월일일', '전월누적']].sort_values('날짜_dt', ascending=True).style.format({
+                            '일일': '{:,.0f}원',
+                            '누적': '{:,.0f}원',
+                            '전월일일': '{:,.0f}원',
+                            '전월누적': '{:,.0f}원'
+                        }),
+                        column_config={
+                            "날짜_dt": None,
+                            "표시날짜": st.column_config.TextColumn("날짜", width="small"),
+                            "일일": st.column_config.TextColumn("당월", width="small"),
+                            "누적": st.column_config.TextColumn("누적", width="small"),
+                            "전월날짜": st.column_config.TextColumn("날짜", width="small"),
+                            "전월일일": st.column_config.TextColumn("전월", width="small"),
+                            "전월누적": st.column_config.TextColumn("누적", width="small"),
+                        },
+                        use_container_width=True,
+                        hide_index=True,
+                        column_order=("표시날짜", "일일", "누적", "전월날짜", "전월일일", "전월누적"),
+                        height=600 if chart_view == "모두 보기" else 350
+                    )
+                else:
+                    st.dataframe(
+                        table_df[['날짜_dt', '표시날짜', '일일', '누적']].sort_values('날짜_dt', ascending=True).style.format({
+                            '일일': '{:,.0f}원',
+                            '누적': '{:,.0f}원'
+                        }),
+                        column_config={
+                            "날짜_dt": None,
+                            "표시날짜": st.column_config.TextColumn("날짜", width="small"),
+                            "일일": st.column_config.TextColumn("일일", width="small"),
+                            "누적": st.column_config.TextColumn("누적", width="small")
+                        },
+                        use_container_width=True,
+                        hide_index=True,
+                        column_order=("표시날짜", "일일", "누적"),
+                        height=600 if chart_view == "모두 보기" else 350
+                    )
         else:
             st.info("해당 기간 내 실적이 없습니다.")
     else:
