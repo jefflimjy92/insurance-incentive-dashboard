@@ -692,6 +692,10 @@ def init_session_state():
         st.session_state.selected_agent = None
     if 'selected_team' not in st.session_state:
         st.session_state.selected_team = None
+    if 'nav_history' not in st.session_state:
+        st.session_state.nav_history = []
+    if 'scroll_to_top' not in st.session_state:
+        st.session_state.scroll_to_top = False
     if 'active_menu' not in st.session_state:
         st.session_state.active_menu = "대시보드"
 
@@ -836,8 +840,14 @@ def render_main_controls():
     if current_agent:
         # Agent Detail Header
         def back_to_main():
-            st.session_state.selected_agent = None
-            
+            if st.session_state.nav_history:
+                prev = st.session_state.nav_history.pop()
+                st.session_state.selected_agent = prev.get('selected_agent')
+                st.session_state.selected_team = prev.get('selected_team')
+            else:
+                st.session_state.selected_agent = None
+                st.session_state.selected_team = None
+
         nav_items = [
             {'label': '통계', 'anchor': '#stats-section'},
             {'label': '추이', 'anchor': '#trend-section'},
@@ -852,7 +862,13 @@ def render_main_controls():
     elif current_team:
         # Branch Detail Header
         def back_to_main_team():
-            st.session_state.selected_team = None
+            if st.session_state.nav_history:
+                prev = st.session_state.nav_history.pop()
+                st.session_state.selected_agent = prev.get('selected_agent')
+                st.session_state.selected_team = prev.get('selected_team')
+            else:
+                st.session_state.selected_agent = None
+                st.session_state.selected_team = None
 
         nav_items = [
             {'label': '통계', 'anchor': '#stats-section'},
@@ -2975,6 +2991,10 @@ def main():
                                      st.markdown(f"<div style='text-align:right; color:#6B7280; font-size:0.9rem; padding-top:10px;'>{row['기타실적']:,.0f}</div>", unsafe_allow_html=True)
                                  with cols[7]:
                                      if st.button("조회", key=f"btn_team_detail_member_{idx}", use_container_width=True):
+                                         st.session_state.nav_history.append({
+                                             'selected_agent': st.session_state.selected_agent,
+                                             'selected_team': st.session_state.selected_team,
+                                         })
                                          st.session_state.selected_agent = row['설계사']
                                          st.session_state.selected_team = None
                                          st.rerun()
@@ -3198,6 +3218,10 @@ def main():
                                         with cols[8]:
                                             # Removed use_container_width to keep it small and centered
                                             if st.button("상세", key=f"team_list_btn_{t_idx}"):
+                                                st.session_state.nav_history.append({
+                                                    'selected_agent': st.session_state.selected_agent,
+                                                    'selected_team': st.session_state.selected_team,
+                                                })
                                                 st.session_state.selected_team = t_row['소속']
                                                 st.rerun()
                                         st.markdown("<div style='border-bottom:1px solid #F3F4F6; margin-bottom:5px;'></div>", unsafe_allow_html=True)
@@ -3293,6 +3317,10 @@ def main():
                                         with cols[8]:
                                             # Removed use_container_width to keep it small and centered
                                             if st.button("상세", key=f"agent_list_btn_{idx}"):
+                                                st.session_state.nav_history.append({
+                                                    'selected_agent': st.session_state.selected_agent,
+                                                    'selected_team': st.session_state.selected_team,
+                                                })
                                                 st.session_state.selected_agent = row['설계사']
                                                 st.rerun()
                                         
